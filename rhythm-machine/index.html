@@ -137,9 +137,43 @@ function initTrackVolume(id) {
     }
 }
 
+// 【変更】画面が開いた瞬間に、初期トラック生成と同時にデフォルトWAVを先読みする指示
 window.addEventListener('DOMContentLoaded', () => {
-    trackIds.forEach(id => { createTrackDOM(id, trackLabels[id]); });
+    trackIds.forEach(id => {
+        createTrackDOM(id, trackLabels[id]);
+    });
+    
+    // 【機能追加】同じフォルダ内にあるデフォルト音源を自動で読み込む
+    loadDefaultWav('kick', 'kick.wav');
+    loadDefaultWav('snare', 'snare.wav');
+    loadDefaultWav('hat', 'hat.wav');
 });
+
+// 【追加】サーバー内のWAVファイルを通信で取得してバッファにセットする自動先読みロジック
+function loadDefaultWav(type, fileName) {
+    const zone = document.getElementById(`drop-${type}`);
+    if (!zone) return;
+
+    zone.textContent = "自動読み込み中...";
+    
+    // サーバー上のファイルをバイナリデータとして取得
+    fetch(fileName)
+        .then(response => {
+            if (!response.ok) throw new Error('ファイルが見つかりません');
+            return response.arrayBuffer();
+        })
+        .then(arrayBuffer => Tone.getContext().decodeAudioData(arrayBuffer))
+        .then(buffer => {
+            buffers[type] = buffer;
+            zone.textContent = fileName + " (既定)";
+            zone.classList.add('loaded'); // 緑色にする指示
+        })
+        .catch(err => {
+            // もしフォルダ内にファイルがなかった場合は、手動ドロップを促す表示に戻す指示
+            zone.innerHTML = `${trackLabels[type]}<br>を選択`;
+            console.log(fileName + " の自動先読みをスキップしました（手動選択可能です）");
+        });
+}
 
 function addNewTrackPrompt() {
     const name = prompt("追加したい音源や楽器の名前を入力してください:", "Percussion");
@@ -183,6 +217,7 @@ function createTrackDOM(id, labelText) {
     setupTrack(id);
 }
 
+// 【システム対策】引き算と割り算だけで文字消えを100%回避する定番パターン入力
 function applyPreset(patternName) {
     document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
     if (patternName === 'clear') return;
@@ -320,12 +355,10 @@ function applyFxChange(fxType) {
     if (fxType === 'dist') distortion.wet.value = 1; else if (fxType === 'reverb') reverb.wet.value = 1;
 }
 
-// 【コア新設計：複数ループ連続書き出し対応】
 document.getElementById('recBtn').addEventListener('click', async () => {
     const bpm = parseFloat(document.getElementById('bpmInput').value);
     const fxType = document.getElementById('fxSelect').value;
     
-    // 【変更】画面から選ばれたループ数を取得し、正確な総再生時間を計算
     const loopCount = parseInt(document.getElementById('loopSelect').value);
     const oneLoopDuration = (60 / bpm) * 4; 
     const totalDuration = oneLoopDuration * loopCount; 
@@ -350,9 +383,7 @@ document.getElementById('recBtn').addEventListener('click', async () => {
 
         const stepTime = (60 / bpm) / 4;
 
-        // 指定されたループ数（loopCount回）だけ、音の配置を繰り返す指示
         for (let l = 0; l < loopCount; l++) {
-            // 現在のループの開始時間（秒）を割り出す
             const loopOffset = l * oneLoopDuration;
 
             trackIds.forEach(type => {
@@ -361,8 +392,6 @@ document.getElementById('recBtn').addEventListener('click', async () => {
                     if (step.classList.contains('active') && buffers[type]) {
                         const player = new Tone.Player(buffers[type]).connect(offlineTrackVols[type]);
                         if (fxType === 'crush') { player.playbackRate = 0.5; }
-                        
-                        // ループの開始時間に、各マスのタイミング（index * stepTime）を足してジャストで配置
                         player.start(loopOffset + (index * stepTime));
                     }
                 });
