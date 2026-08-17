@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Music Creation Toolkit</title>
+  <style>
+    /* 全体のスタイル（ダークモード・近未来風） */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0f111a;
+      color: #e2e8f0;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      text-align: center;
+      padding: 50px 20px 30px 20px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      letter-spacing: 2px;
+      background: linear-gradient(45deg, #00f2fe, #4facfe);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 30px rgba(79, 172, 254, 0.3);
+    }
+
+    header p {
+      margin: 10px 0 0 0;
+      color: #718096;
+      font-size: 1rem;
+    }
+
+    /* メインコンテナ（グリッドレイアウトで綺麗に整列） */
+    .menu-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
+      max-width: 1000px;
+      width: 90%;
+      padding: 20px;
+      margin-bottom: 50px;
+    }
+
+    /* 各ツールのカードスタイル */
+    .menu-card {
+      background: linear-gradient(145deg, #161925, #12141f);
+      border: 1px solid #23283d;
+      border-radius: 12px;
+      padding: 30px 25px;
+      text-decoration: none;
+      color: inherit;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* カードにマウスを乗せたときの光るアニメーション */
+    .menu-card:hover {
+      transform: translateY(-5px);
+      border-color: #4facfe;
+      box-shadow: 0 15px 30px rgba(79, 172, 254, 0.2);
+    }
+
+    /* 装飾用の光るライン */
+    .menu-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: #23283d;
+      transition: background 0.3s;
+    }
+    .menu-card:hover::before {
+      background: linear-gradient(to bottom, #00f2fe, #4facfe);
+    }
+
+    /* カード内の文字スタイル */
+    .card-icon {
+      font-size: 2rem;
+      margin-bottom: 15px;
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin: 0 0 10px 0;
+      color: #fff;
+      transition: color 0.3s;
+    }
+    .menu-card:hover .card-title {
+      color: #00f2fe;
+    }
+
+    .card-desc {
+      font-size: 0.9rem;
+      color: #a0aec0;
+      line-height: 1.5;
+      margin: 0;
+      flex-grow: 1;
+    }
+
+    footer {
+      margin-top: auto;
+      padding: 20px;
+      color: #4a5568;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>WEB MUSIC CREATION TOOLKIT</h1>
+    <p>ゲーム制作・Web開発のためのサウンドクリエイティブ環境</p>
+  </header>
+
+  <main class="menu-container">
+
+    <!-- 1. 効果音ジェネレーター -->
+    <a href="se-generator/index.html" class="menu-card">
+      <div class="card-icon">👾</div>
+      <div class="card-title">効果音ジェネレーター</div>
+      <div class="card-desc">ゲーム用のレトロなピコピコ音や爆発音、ジャンプ音などをパラメーター調整で手軽に自動生成・出力します。</div>
+    </a>
+
+    <!-- 2. リズムマシン -->
+    <a href="rhythm-machine/index.html" class="menu-card">
+      <div class="card-icon">🥁</div>
+      <div class="card-title">リズムマシン</div>
+      <div class="card-desc">ドラムやパーカッションのパターンを直感的にステップ入力し、ゲームのベースとなるリズムループを構築します。</div>
+    </a>
+
+    <!-- 3. 簡易フレーズ作成 -->
+    <a href="simple-phrase/index.html" class="menu-card">
+      <div class="card-icon">🎵</div>
+      <div class="card-title">簡易フレーズ作成</div>
+      <div class="card-desc">短いメロディやキャッチーなフレーズをワンクリックでサクッと作成し、ゲームのジングルや通知音として書き出します。</div>
+    </a>
+
+    <!-- 4. 作曲フレーズ（シーケンサー） -->
+    <a href="sequencer/index.html" class="menu-card">
+      <div class="card-icon">🎹</div>
+      <div class="card-title">作曲フレーズシーケンサー</div>
+      <div class="card-desc">全32ステップのノートセレクト式エディタ。各ステップの音程を直感的に選択してメロディやコード進行を作曲し、BGMの核となるフレーズを形にします。テンポ即時反映。</div>
+    </a>
+
+
+    <!-- 5. BGM合成・結合ミキサー（他で作った素材の加工用として最後に配置） -->
+    <a href="mixer/index.html" class="menu-card">
+      <div class="card-icon">🎛️</div>
+      <div class="card-title">BGM合成・結合ミキサー</div>
+      <div class="card-desc">作成した各種素材を持ち込み、2つのWavファイルを重ね合わせ（タイムストレッチ同期）または直列に結合します。エフェクト加工やシームレスな無限ループ処理に対応。</div>
+    </a>
+
+  </main>
+
+  <footer>
+    &copy; 2026 Web Music Creation Toolkit. All Rights Reserved.
+  </footer>
+
+</body>
+</html>

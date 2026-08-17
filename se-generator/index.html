@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8"><title>JS効果音メーカー</title>
+    <style>
+        body { font-family: sans-serif; background: #222; color: #fff; padding: 15px; max-width: 450px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 15px; }
+        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        .preset { background: #444; color: #ccc; }
+        .row { margin-bottom: 10px; display: flex; flex-direction: column; }
+        input, select { width: 100%; padding: 5px; box-sizing: border-box; background: #333; color: #fff; border: 1px solid #555; }
+        .favs { background: #333; padding: 8px; max-height: 80px; overflow-y: auto; margin-bottom: 15px; font-size: 0.85rem; }
+        pre { background: #111; padding: 10px; max-height: 120px; overflow: auto; color: #a9ffb4; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+    <h3>🔊 効果音メーカー</h3>
+    <div class="grid">
+        <button class="preset" onclick="loadP('explosion')">💥爆発</button>
+        <button class="preset" onclick="loadP('sandstorm')">📺砂嵐</button>
+        <button class="preset" onclick="loadP('laser')">🔫レーザー</button>
+        <button class="preset" onclick="loadP('coin')">🪙コイン</button>
+        <button class="preset" onclick="loadP('jump')">🦘ジャンプ</button>
+        <button class="preset" onclick="loadP('hit')">🥊打撃</button>
+    </div>
+    <div style="display:flex; gap:5px; margin-bottom:15px;">
+        <input type="text" id="fIn" placeholder="お気に入りの名前" style="flex:1;">
+        <button onclick="saveF()">保存</button>
+    </div>
+    <div class="favs" id="fList"></div>
+    <div class="row" style="background:#334; padding:5px; border-radius:4px; border-left:4px solid #e91e63;">
+        <label>エコーの強さ: <span id="v-echo">0.4</span></label>
+        <input type="range" id="echo" min="0" max="0.8" step="0.1" value="0.4" oninput="up()" onchange="play()">
+    </div>
+    <div class="row"><label>ノイズ比: <span id="v-nMix">0.0</span></label><input type="range" id="nMix" min="0" max="1" step="0.1" value="0" oninput="up()" onchange="play()"></div>
+    <div class="row"><label>波形</label><select id="type" onchange="up();play()"><option value="sine">sine</option><option value="square" selected>square</option><option value="sawtooth">sawtooth</option><option value="triangle">triangle</option></select></div>
+    <div class="row"><label>始動周波数(Hz): <span id="v-sF">587</span></label><input type="range" id="sF" min="40" max="2000" step="10" value="587" oninput="up()" onchange="play()"></div>
+    <div class="row"><label>終了周波数(Hz): <span id="v-eF">880</span></label><input type="range" id="eF" min="40" max="2000" step="10" value="880" oninput="up()" onchange="play()"></div>
+    <div class="row"><label>長さ(秒): <span id="v-dur">0.3</span></label><input type="range" id="dur" min="0.05" max="2" step="0.05" value="0.3" oninput="up()" onchange="play()"></div>
+    <div class="row"><label>変化型</label><select id="ramp" onchange="up();play()"><option value="linear">linear</option><option value="exponential">exponential</option><option value="jump" selected>jump</option></select></div>
+    <button style="width:100%; margin-bottom:5px;" onclick="play()">▶ 試聴する</button>
+    <button style="width:100%; background:#008cba; color:#fff;" onclick="dlWav()">📥 WAV保存</button>
+    <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;"><span>📋 出力コード:</span><button style="background:#4caf50; color:#fff; padding:2px 6px; font-size:0.7rem;" onclick="copyC()">コピー</button></div>
+    <pre id="cText"></pre>
+
+    <script>
+        const actx = new(window.AudioContext||window.webkitAudioContext)(); let pName = 'coin';
+        const getV = (id) => (id==='type'||id==='ramp') ? document.getElementById(id).value : parseFloat(document.getElementById(id).value);
+        function up() { ['echo','nMix','sF','eF','dur'].forEach(k => { document.getElementById('v-'+k).textContent = document.getElementById(k).value; }); genC(); }
+        function copyC() { navigator.clipboard.writeText(document.getElementById('cText').textContent); }
+        function sGraph(ctx, echo, nMix, type, sF, eF, dur, ramp) {
+            const mG = ctx.createGain(); mG.connect(ctx.destination); const now = ctx.currentTime;
+            mG.gain.setValueAtTime(0.2, now); mG.gain.exponentialRampToValueAtTime(0.001, now + dur + (echo > 0 ? 1.0 : 0));
+            let dNode = null, fG = null;
+            if (echo > 0) {
+                dNode = ctx.createDelay(); dNode.delayTime.setValueAtTime(0.12, now);
+                fG = ctx.createGain(); fG.gain.setValueAtTime(echo, now);
+                dNode.connect(fG); fG.connect(dNode); fG.connect(mG);
+            }
+            const outNode = dNode ? dNode : mG;
+            let nS = null; if (nMix > 0) {
+                nS = ctx.createBufferSource(); const rate = ctx.sampleRate, size = rate * dur, buf = ctx.createBuffer(1, size, rate), d = buf.getChannelData(0);
+                for(let i=0; i<size; i++) d[i] = Math.random()*2-1; nS.buffer = buf; const nG = ctx.createGain(); nG.gain.setValueAtTime(nMix, now); nS.connect(nG); nG.connect(mG); nG.connect(outNode);
+            }
+            let osc = null; if (1 - nMix > 0) {
+                osc = ctx.createOscillator(); const tG = ctx.createGain(); tG.gain.setValueAtTime(1 - nMix, now); osc.type = type; osc.frequency.setValueAtTime(sF, now);
+                if (ramp === 'linear') osc.frequency.linearRampToValueAtTime(eF, now + dur);
+                else if (ramp === 'exponential') osc.frequency.exponentialRampToValueAtTime(Math.max(1, eF), now + dur);
+                else if (ramp === 'jump') osc.frequency.setValueAtTime(eF, now + (dur * 0.25));
+                osc.connect(tG); tG.connect(mG); tG.connect(outNode);
+            }
+            return { nS, osc };
+        }
+        function play() { if (actx.state==='suspended') actx.resume(); const s = sGraph(actx, getV('echo'), getV('nMix'), getV('type'), getV('sF'), getV('eF'), getV('dur'), getV('ramp')); if(s.nS){s.nS.start();s.nS.stop(actx.currentTime+getV('dur'));} if(s.osc){s.osc.start();s.osc.stop(actx.currentTime+getV('dur'));} }
+        function genC() {
+            const ec = getV('echo'), nM = getV('nMix'), ty = getV('type'), sF = getV('sF'), eF = getV('eF'), du = getV('dur'), ra = getV('ramp'), sn = pName.replace(/[^a-zA-Z0-9_]/g, "se");
+            let pC = `osc.frequency.setValueAtTime(${sF}, now); osc.frequency.${ra==='jump'?'setValueAtTime':ra+'RampToValueAtTime'}(${eF}, now + ${ra==='jump'?du+'*0.25':du});`;
+            let ecC = ec > 0 ? `const d = ctx.createDelay(), f = ctx.createGain(); d.delayTime.setValueAtTime(0.12, now); f.gain.setValueAtTime(${ec}, now); d.connect(f); f.connect(d); f.connect(mG);` : '';
+            let conn = ec > 0 ? `connect(mG); n.connect(d);` : `connect(mG);`;
+            let connO = ec > 0 ? `connect(mG); osc.connect(tG); tG.connect(d);` : `connect(mG);`;
+            document.getElementById('cText').textContent = `function play_${sn}_Sound() {\n    const ctx = new AudioContext(), now = ctx.currentTime, mG = ctx.createGain(); mG.connect(ctx.destination); mG.gain.setValueAtTime(0.2, now); mG.gain.exponentialRampToValueAtTime(0.001, now + ${du} + ${ec>0?1.0:0});\n    ${ecC}\n    if (${nM} > 0) { const sz = ctx.sampleRate * ${du}, buf = ctx.createBuffer(1, sz, ctx.sampleRate), dData = buf.getChannelData(0); for (let i = 0; i < sz; i++) dData[i] = Math.random() * 2 - 1; const n = ctx.createBufferSource(); n.buffer = buf; const nG = ctx.createGain(); nG.gain.setValueAtTime(${nM}, now); n.connect(nG); nG.${conn} n.start(now); n.stop(now + ${du}); }\n    if (${1-nM} > 0) { const osc = ctx.createOscillator(), tG = ctx.createGain(); tG.gain.setValueAtTime(${1-nM}, now); osc.type = '${ty}'; ${pC} osc.connect(tG); tG.${connO} osc.start(now); osc.stop(now + ${du}); }\n}`;
+        }
+        function dlWav() {
+            const ec = getV('echo'), nM = getV('nMix'), ty = getV('type'), sF = getV('sF'), eF = getV('eF'), du = getV('dur'), ra = getV('ramp'), rate = 44100, totalD = du + (ec > 0 ? 1.0 : 0), frames = rate * totalD, octx = new OfflineAudioContext(1, frames, rate);
+            const s = sGraph(octx, ec, nM, ty, sF, eF, du, ra); if(s.nS){s.nS.start(0);s.nS.stop(du);} if(s.osc){s.osc.start(0);s.osc.stop(du);}
+            octx.startRendering().then(buf => {
+                let res = buf.getChannelData(0), bl = res.length * 2, ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
+                const wS = (o, s) => { for (let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
+                wS(0, 'RIFF'); v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); wS(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); wS(36, 'data'); v.setUint32(40, bl, true);
+                for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `${pName}_effect.wav`; a.click();
+            });
+        }
+        const presets = {
+            explosion: { noiseMix: 0.8, type: 'sawtooth', startFreq: 200, endFreq: 40, duration: 0.5, ramp: 'linear' }, sandstorm: { noiseMix: 1, type: 'sine', startFreq: 440, endFreq: 440, duration: 1.5, ramp: 'linear' },
+            laser: { noiseMix: 0.2, type: 'sawtooth', startFreq: 1600, endFreq: 100, duration: 0.25, ramp: 'linear' }, coin: { noiseMix: 0, type: 'square', startFreq: 587, endFreq: 880, duration: 0.3, ramp: 'jump' },
+            jump: { noiseMix: 0, type: 'sine', startFreq: 150, endFreq: 600, duration: 0.4, ramp: 'exponential' }, hit: { noiseMix: 0.5, type: 'triangle', startFreq: 120, endFreq: 40, duration: 0.12, ramp: 'linear' }
+        };
+        function loadP(n) { pName = n; const p = presets[n]; document.getElementById('echo').value = (n==='coin'||n==='laser') ? 0.4 : 0; applyP(p); }
+        function applyP(p) { document.getElementById('nMix').value = p.noiseMix; document.getElementById('type').value = p.type; document.getElementById('sF').value = p.startFreq; document.getElementById('eF').value = p.endFreq; document.getElementById('dur').value = p.duration; document.getElementById('ramp').value = p.ramp; up(); play(); }
+        function getF() { const f = localStorage.getItem('js_sm_f2'); return f ? JSON.parse(f) : {}; }
+        function saveF() { const inp = document.getElementById('fIn'), n = inp.value.trim(); if (!n) return; const f = getF(); f[n] = { echo: getV('echo'), noiseMix: getV('nMix'), type: getV('type'), startFreq: getV('sF'), endFreq: getV('eF'), duration: getV('dur'), ramp: getV('ramp') }; localStorage.setItem('js_sm_f2', JSON.stringify(f)); inp.value = ''; pName = n; rFavs(); genC(); }
+        function delF(n) { const f = getF(); delete f[n]; localStorage.setItem('js_sm_f2', JSON.stringify(f)); rFavs(); }
+        function loadF(n) { const f = getF(); if (f[n]) { pName = n; document.getElementById('echo').value = f[n].echo || 0; applyP(f[n]); } }
+        function rFavs() { const f = getF(), list = document.getElementById('fList'); list.innerHTML = ''; const keys = Object.keys(f); if (keys.length === 0) { list.innerHTML = '<div style="color:#777;text-align:center;">なし</div>'; return; } keys.forEach(n => { const div = document.createElement('div'); div.style = 'display:flex; justify-content:space-between; margin-bottom:3px;'; div.innerHTML = `<span style="cursor:pointer;color:#a9ffb4;" onclick="loadF('${n}')">⭐ ${n}</span><button style="background:#e53935;color:#fff;padding:2px 5px;font-size:0.7rem;" onclick="delF('${n}')">消去</button>`; list.appendChild(div); }); }
+        rFavs(); up();
+    </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>BGM Mixer & Joiner</title>
+  <!-- ローカルのTone.jsを読み込み -->
+  <script src="Tone.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #fafafa;
+      color: #333;
+    }
+    .mode-container {
+      background-color: #e8f4fd;
+      padding: 12px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      max-width: 600px;
+      font-weight: bold;
+    }
+    .timeline-container {
+      background-color: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 15px 0;
+      max-width: 600px;
+    }
+    .track-row {
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+    }
+    .track-label {
+      width: 140px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .bar-bg {
+      flex-grow: 1;
+      background-color: #ddd;
+      height: 24px;
+      border-radius: 4px;
+      position: relative;
+      margin: 0 10px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    #rhythmBar { background-color: #3498db; }
+    #phraseBar { background-color: #e67e22; }
+    .time-text {
+      width: 60px;
+      text-align: right;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .radio-col {
+      margin-right: 10px;
+    }
+    .effect-panel {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      margin: 5px 0 15px 145px;
+      max-width: 440px;
+      font-size: 13px;
+    }
+    .effect-row {
+      margin: 5px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .effect-row input {
+      width: 60%;
+    }
+    #resultStatus {
+      margin-left: 15px;
+      font-weight: bold;
+      color: #27ae60;
+    }
+    .action-area {
+      display: flex;
+      align-items: center;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>BGM合成・結合ツール</h1>
+
+  <!-- 【新設】処理モードの選択 -->
+  <div class="mode-container">
+    <label style="margin-right: 20px;">処理モード：</label>
+    <input type="radio" name="processMode" id="modeMix" value="mix" checked>
+    <label href="for=modeMix" style="margin-right: 15px; cursor: pointer;">重ね合わせ（ミックス）</label>
+    <input type="radio" name="processMode" id="modeJoin" value="join">
+    <label href="for=modeJoin" style="cursor: pointer;">結合（直列つなぎ）</label>
+  </div>
+
+  <div>
+    <label>① トラックA：</label>
+    <input type="file" id="rhythmFile" accept="audio/wav">
+  </div>
+  
+  <!-- トラックA用エフェクト＆音量パネル -->
+  <div class="effect-panel">
+    <div class="effect-row">
+      <span style="font-weight: bold; color: #3498db;">トラックA 音量 (Volume):</span>
+      <input type="range" id="volA" min="-20" max="6" step="1" value="-3">
+    </div>
+    <div class="effect-row">
+      <span>トラックA 歪み (Distortion):</span>
+      <input type="range" id="distA" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="effect-row">
+      <span>トラックA エコー (Echo):</span>
+      <input type="range" id="echoA" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="effect-row">
+      <span>トラックA ローパス (こもる):</span>
+      <input type="range" id="lpA" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="effect-row">
+      <span>トラックA ハイパス (軽い):</span>
+      <input type="range" id="hpA" min="0" max="1" step="0.05" value="0">
+    </div>
+  </div>
+
+  <div>
+    <label>② トラックB：</label>
+    <input type="file" id="phraseFile" accept="audio/wav">
+  </div>
+
+  <!-- トラックB用エフェクト＆音量パネル -->
+  <div class="effect-panel">
+    <div class="effect-row">
+      <span style="font-weight: bold; color: #e67e22;">トラックB 音量 (Volume):</span>
+      <input type="range" id="volB" min="-20" max="6" step="1" value="-3">
+    </div>
+    <div class="effect-row">
+      <span>トラックB 歪み (Distortion):</span>
+      <input type="range" id="distB" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="effect-row">
+      <span>トラックB エコー (Echo):</span>
+      <input type="range" id="echoB" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="effect-row">
+      <span>トラックB ローパス (こもる):</span>
+      <input type="range" id="lpB" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="effect-row">
+      <span>トラックB ハイパス (軽い):</span>
+      <input type="range" id="hpB" min="0" max="1" step="0.05" value="0">
+    </div>
+  </div>
+
+  <!-- 視覚化 ＆ 基準切り替えエリア -->
+  <div class="timeline-container">
+    <!-- 【注記の動的変更用】 -->
+    <p id="modeNotice" style="margin: 0 0 10px 0; font-size: 12px; color: #666;">※どちらを「基準（等速）」にするか選択してください。もう一方がタイムストレッチされます。</p>
+    
+    <div class="track-row">
+      <input type="radio" name="baseTrack" id="baseRhythm" value="rhythm" class="radio-col" checked>
+      <!-- 【ラベル変更対応】 -->
+      <span id="labelA" class="track-label">トラックA (基準)</span>
+      <div class="bar-bg"><div id="rhythmBar" class="bar-fill"></div></div>
+      <span id="rhythmTime" class="time-text">0.00s</span>
+    </div>
+    
+    <div class="track-row">
+      <input type="radio" name="baseTrack" id="basePhrase" value="phrase" class="radio-col">
+      <!-- 【ラベル変更対応】 -->
+      <span id="labelB" class="track-label">トラックB</span>
+      <div class="bar-bg"><div id="phraseBar" class="bar-fill"></div></div>
+      <span id="phraseTime" class="time-text">0.00s</span>
+    </div>
+  </div>
+
+  <div class="action-area">
+    <button id="mixBtn">③ 音声の読み込みと合成を開始</button>
+    <span id="resultStatus"></span>
+  </div>
+  
+  <hr>
+  <button id="playBtn" disabled>④ BGMを試聴する</button>
+  <button id="downloadBtn" disabled>⑤ Wavファイルを保存する</button>
+
+  <script src="wav-encoder.js"></script>
+  <script src="audio-processor.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

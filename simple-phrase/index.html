@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8"><title>JSループBGMメーカー</title>
+    <style>
+        body { font-family: sans-serif; background: #1e1e24; color: #fff; padding: 15px; max-width: 450px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 15px; }
+        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.85rem; }
+        button.preset { background: #444; color: #ccc; }
+        button.preset:hover { background: #555; color: #fff; }
+        .row { margin-bottom: 10px; display: flex; flex-direction: column; }
+        input, select { width: 100%; padding: 5px; box-sizing: border-box; background: #333; color: #fff; border: 1px solid #555; }
+        pre { background: #111; padding: 10px; max-height: 120px; overflow: auto; color: #a9ffb4; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+    <h3>🎵 ループBGMメーカー</h3>
+    
+    <div class="grid">
+        <button class="preset" onclick="loadM('hero')">⚔️ 勇者(王道)</button>
+        <button class="preset" onclick="loadM('town')">🏡 街(のんびり)</button>
+        <button class="preset" onclick="loadM('dark')">😈 魔王城(重低音)</button>
+        <button class="preset" onclick="loadM('stg')">🚀 STG(疾走)</button>
+        <button class="preset" onclick="loadM('battle')">🥊 対戦(緊迫)</button>
+        <button class="preset" onclick="loadM('puzzle')">🧩 落ちゲー(中毒)</button>
+    </div>
+    
+    <div class="row" style="background:#344; padding:5px; border-radius:4px; border-left:4px solid #4caf50;">
+        <label>全体の音量 (ボリューム): <span id="v-vol">40</span>%</label><input type="range" id="vol" min="0" max="100" step="5" value="40" oninput="up()">
+    </div>
+    <div class="row" style="background:#334; padding:5px; border-radius:4px; border-left:4px solid #e91e63;">
+        <label>BGMテンポ (速度): <span id="v-tempo">130</span></label>
+        <input type="range" id="tempo" min="60" max="240" step="5" value="130" oninput="up()" onchange="changeTempo()">
+    </div>
+    <div class="row" style="background:#3d2f3d; padding:5px; border-radius:4px; border-left:4px solid #00bcd4;">
+        <label>エコーの強さ (残響): <span id="v-echo">0.6</span></label>
+        <input type="range" id="echo" min="0" max="0.95" step="0.05" value="0.6" oninput="up()" onchange="changeTempo()">
+    </div>
+    <div class="row"><label>ベース音色（波形）</label><select id="type" onchange="up()"><option value="sine">sine（滑らか）</option><option value="square">square（ピコピコ）</option><option value="triangle" selected>triangle（ファミコン風）</option></select></div>
+    
+    <button style="width:100%; margin-bottom:5px; background:#4caf50; color:#fff;" id="pBtn" onclick="togglePlay()">▶ BGMを再生する</button>
+    <button style="width:100%; background:#008cba; color:#fff;" onclick="dlWav()">📥 無限ループ用WAV保存</button>
+    <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;"><span>📋 ゲーム用BGMコード:</span><button style="background:#888; color:#fff; padding:2px 6px; font-size:0.7rem;" onclick="copyC()">コピー</button></div>
+    <pre id="cText"></pre>
+
+    <script>
+        const actx = new(window.AudioContext||window.webkitAudioContext)();
+        let isPlaying = false, timerId = null, stepIndex = 0;
+        let melody = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66];
+
+        const getV = (id) => id==='type' ? document.getElementById(id).value : parseFloat(document.getElementById(id).value);
+        function up() { ['vol','tempo','echo'].forEach(k => { document.getElementById('v-'+k).textContent = document.getElementById(k).value; }); genC(); }
+        function copyC() { navigator.clipboard.writeText(document.getElementById('cText').textContent); }
+
+        function playNote(ctx, freq, type, echo, vol, time, duration) {
+            if (freq === 0) return;
+            const osc = ctx.createOscillator(), gain = ctx.createGain(), mG = ctx.createGain();
+            mG.connect(ctx.destination);
+            
+            const vRatio = vol / 100;
+            // 🔴 改善：複数の音が重なっても音が割れないよう、基準の音量をマイルド（0.06〜）に再調整
+            let factor = 0.06; if (type === 'sine') factor = 0.24; else if (type === 'triangle') factor = 0.18;
+            if (freq < 200) { if (type === 'sine') factor *= 3.5; else if (type === 'triangle') factor *= 2.2; }
+            
+            mG.gain.setValueAtTime(factor * vRatio, time);
+            
+            // 🔴 改善：フェードアウト時間を元の綺麗な残響（duration + エコー余韻）に戻してノイズを除去
+            const trail = echo > 0 ? (echo * 2.5) : 0;
+            mG.gain.exponentialRampToValueAtTime(0.001, time + duration + trail);
+
+            let out = mG; if (echo > 0) {
+                const d = ctx.createDelay(); d.delayTime.setValueAtTime(0.28, time);
+                const f = ctx.createGain(); f.gain.setValueAtTime(echo, time);
+                d.connect(f); f.connect(d); f.connect(mG); out = d;
+            }
+            osc.type = type; osc.frequency.setValueAtTime(freq, time);
+            osc.connect(gain); gain.connect(mG); gain.connect(out);
+            osc.start(time); osc.stop(time + duration);
+        }
+        function changeTempo() {
+            if (!isPlaying) return;
+            clearInterval(timerId);
+            const stepTime = 60 / getV('tempo') / 2;
+            timerId = setInterval(() => {
+                playNote(actx, melody[stepIndex], getV('type'), getV('echo'), getV('vol'), actx.currentTime, stepTime * 0.9);
+                stepIndex = (stepIndex + 1) % melody.length;
+            }, stepTime * 1000);
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                clearInterval(timerId); isPlaying = false;
+                document.getElementById('pBtn').textContent = '▶ BGMを再生する';
+            } else {
+                if (actx.state==='suspended') actx.resume();
+                isPlaying = true; stepIndex = 0;
+                document.getElementById('pBtn').textContent = '⏹ 停止する';
+                changeTempo();
+            }
+        }
+
+        function genC() {
+            const vl = getV('vol'), tm = getV('tempo'), ec = getV('echo'), ty = getV('type');
+            let ecC = ec > 0 ? `const d=ctx.createDelay(), f=ctx.createGain(); d.delayTime.setValueAtTime(0.28,now); f.gain.setValueAtTime(${ec},now); d.connect(f); f.connect(d); mG.connect(d?d:mG);` : '';
+            document.getElementById('cText').textContent = `function startLoopBGM() {
+    const ctx = new AudioContext(), melody = [${melody.join(',')}];
+    let idx = 0, step = ${60 / tm / 2};
+    setInterval(() => {
+        const freq = melody[idx]; idx = (idx + 1) % melody.length; if (freq === 0) return;
+        const osc = ctx.createOscillator(), gain = ctx.createGain(), mG = ctx.createGain(), now = ctx.currentTime;
+        mG.connect(ctx.destination); let factor = 0.06; if ('${ty}'==='sine') factor=0.24; else if ('${ty}'==='triangle') factor=0.18;
+        if (freq < 200) { if ('${ty}' === 'sine') factor *= 3.5; else if ('${ty}' === 'triangle') factor *= 2.2; }
+        const bVol = factor * (${vl / 100});
+        mG.gain.setValueAtTime(bVol, now); mG.gain.exponentialRampToValueAtTime(0.001, now + step * 0.9 + ${ec>0?(ec*2.5).toFixed(1):0});
+        ${ecC} const out = ${ec > 0 ? 'd' : 'mG'}; osc.type = '${ty}'; osc.frequency.setValueAtTime(freq, now);
+        osc.connect(gain); gain.connect(mG); gain.connect(out); osc.start(now); osc.stop(now+step*0.9);
+    }, step * 1000);
+}`;
+        }
+
+        function dlWav() {
+            const vl = getV('vol'), tm = getV('tempo'), ec = getV('echo'), ty = getV('type'), rate = 44100, step = 60 / tm / 2;
+            
+            // 💡 解決の鍵：WAVのファイル自体の器は「エコーの残響まで含めた少し長めのサイズ」で贅沢に作成する（音切れ・プチプチ防止）
+            const paddingD = ec > 0 ? ec * 2.5 : 0.5;
+            const fullD = step * melody.length + paddingD;
+            const octx = new OfflineAudioContext(1, rate * fullD, rate);
+            
+            for(let i=0; i<melody.length; i++) { playNote(octx, melody[i], ty, ec, vl, step * i, step * 0.9); }
+            
+            octx.startRendering().then(buf => {
+                // 💡 解決の鍵：録音した贅沢なデータから、「1ループジャスト（無音なし）」の長さのデータだけをミリ秒単位で綺麗に抽出
+                const targetLength = Math.floor(rate * (step * melody.length));
+                let res = buf.getChannelData(0).subarray(0, targetLength); // ここでジャストサイズにカット！
+                
+                const bl = res.length * 2;
+                const ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
+                const wS = (o, s) => { for (let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
+                
+                wS(0, 'RIFF'); v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); wS(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); wS(36, 'data'); v.setUint32(40, bl, true);
+                for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `bgm_clean_loop.wav`; a.click();
+            });
+        }
+
+        const mPresets = {
+            hero: [261.63, 329.63, 392.00, 523.25, 493.88, 392.00, 440.00, 0],
+            town: [329.63, 349.23, 392.00, 0, 349.23, 329.63, 293.66, 0],
+            dark: [130.81, 138.59, 146.83, 0, 146.83, 138.59, 130.81, 0],
+            stg: [440.00, 523.25, 587.33, 659.25, 587.33, 523.25, 440.00, 0],
+            battle: [220.00, 233.08, 220.00, 233.08, 329.63, 311.13, 220.00, 0],
+            puzzle: [440.00, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66, 440.00]
+        };
+        const tPresets = { hero: 130, town: 100, dark: 90, stg: 160, battle: 145, puzzle: 150 };
+
+        function loadM(n) { 
+            melody = mPresets[n]; 
+            document.getElementById('tempo').value = tPresets[n];
+            up(); if(isPlaying){ changeTempo(); } 
+        }
+        up();
+    </script>
+</body>
+</html>

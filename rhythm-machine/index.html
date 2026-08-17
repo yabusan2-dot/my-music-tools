@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>プロ仕様WAV書き出し・簡単リズムマシン</title>
+    <script src="Tone.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #1e1e24; color: #fff; text-align: center; padding: 20px; }
+        .control-panel { background: #2a2a35; padding: 15px; border-radius: 8px; display: inline-block; margin-bottom: 15px; }
+        
+        .preset-panel { background: #2f2f3e; padding: 10px; border-radius: 6px; margin-bottom: 15px; display: inline-block; }
+        .preset-btn { background: #4b6584; font-size: 13px; padding: 6px 12px; }
+        .preset-btn:hover { background: #718093; }
+
+        .data-panel { background: #22a6b3; padding: 10px; border-radius: 6px; margin-bottom: 20px; display: inline-block; }
+        .data-btn { background: #0097e6; font-size: 13px; padding: 6px 12px; }
+        .data-btn:hover { background: #00a8ff; }
+
+        .fx-panel { display: block; margin-top: 10px; font-size: 14px; border-top: 1px solid #444; padding-top: 10px; }
+        .vol-slider { width: 80px; vertical-align: middle; cursor: pointer; margin-right: 5px; }
+        
+        .track-control { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 180px; margin-right: 25px; }
+        #tracks-container { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 20px; }
+
+        .row { display: flex; justify-content: center; margin: 10px 0; align-items: center; gap: 10px; }
+        .step-container { display: flex; }
+        .step { width: 25px; height: 35px; margin: 2px; background: #3a3a4a; border-radius: 4px; cursor: pointer; }
+        .step.active { background: #ff4757; }
+        .step.current { box-shadow: 0 0 8px #ff4757; border: 2px solid #fff; }
+        
+        .step:nth-child(4n+1) { background: #4a4a5a; }
+        .step:nth-child(4n+1).active { background: #ff4757; }
+
+        .drop-zone { width: 170px; height: 50px; border: 2px dashed #666; border-radius: 6px; 
+                     display: flex; align-items: center; justify-content: center; font-size: 11px; 
+                     background: #252530; cursor: pointer; transition: 0.2s; text-align: center; padding: 0 5px;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+                     
+        .drop-zone.hover { border-color: #00ffcc; background: #2a3a3a; }
+        .drop-zone.loaded { border-color: #2ed573; background: #203525; color: #2ed573; font-weight: bold; }
+
+        button { padding: 10px 20px; font-size: 16px; font-weight: bold; border: none; border-radius: 5px; color: white; cursor: pointer; margin: 0 5px; transition: 0.1s; }
+        #playBtn { background: #2ed573; }
+        #recBtn { background: #341f97; }
+        #recBtn.recording { background: #ffa502; }
+
+        input[type="number"], select { margin: 0 10px; padding: 5px; background: #3a3a4a; color: white; border: none; border-radius: 3px; }
+        .hidden-file-input { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>WAV自動保存＆詳細ミキサー対応リズムマシン</h1>
+    
+    <div class="control-panel">
+        <button id="playBtn">再生 / 停止</button>
+        <button id="recBtn">💾 高音質WAVを書き出し・保存</button>
+        テンポ(BPM): <input type="number" id="bpmInput" value="120" min="60" max="200" style="width: 50px;">
+        
+        <!-- 【追加】何ループ出力するかを選択できるメニュー -->
+        書き出し長さ:
+        <select id="loopSelect">
+            <option value="1">1ループ (16マス)</option>
+            <option value="2">2ループ (32マス)</option>
+            <option value="4">4ループ (64マス)</option>
+            <option value="8">8ループ (128マス)</option>
+        </select>
+
+        <div class="fx-panel">
+            ✨ 音色の変化・効果: 
+            <select id="fxSelect">
+                <option value="none">効果なし（クリア）</option>
+                <option value="dist">歪み（激しいボス戦風）</option>
+                <option value="crush">ビットクラッシュ（ファミコン風）</option>
+                <option value="reverb">リバーブ（洞窟・空間の広がり）</option>
+            </select>
+        </div>
+    </div>
+
+    <br>
+
+    <div class="preset-panel">
+        <strong>🥁 定番パターン自動入力：</strong>
+        <button class="preset-btn" onclick="applyPreset('fourFloor')">王道4つ打ち</button>
+        <button class="preset-btn" onclick="applyPreset('eightBeat')">万能8ビート</button>
+        <button class="preset-btn" onclick="applyPreset('sixteenBeat')">細かめ16ビート</button>
+        <button class="preset-btn" style="background:#a55eed;" onclick="applyPreset('clear')">全消去</button>
+        <button class="preset-btn" style="background:#20bf6b;" onclick="addNewTrackPrompt()">＋ 新しいトラックを追加</button>
+    </div>
+
+    <div class="data-panel">
+        <strong>💾 パターンの保存と呼び出し：</strong>
+        <button class="data-btn" onclick="savePatternData()">名前を付けてファイルに保存</button>
+        <button class="data-btn" style="background:#4cd137;" onclick="document.getElementById('loadDataInput').click()">パターンファイルを読み込む</button>
+        <input type="file" id="loadDataInput" class="hidden-file-input" accept=".json" onchange="loadPatternData(event)">
+    </div>
+
+    <div id="tracks-container"></div>
+<script>
+const STEP_COUNT = 16;
+let isPlaying = false;
+let currentStep = 0;
+
+let trackIds = ['kick', 'snare', 'hat']; 
+const trackLabels = { kick: '🥁 Kick', snare: '💥 Snare', hat: '✨ Hat' };
+
+const buffers = {};
+const trackVolumes = {};
+
+let mixBus = null;
+let distortion = null;
+let reverb = null;
+
+function initAudio() {
+    if (!mixBus) {
+        mixBus = new Tone.Volume(0);
+        distortion = new Tone.Distortion(0.5); distortion.wet.value = 0;
+        reverb = new Tone.Reverb(2.5); reverb.wet.value = 0;
+
+        trackIds.forEach(id => { initTrackVolume(id); });
+        mixBus.chain(distortion, reverb, Tone.Destination);
+    }
+}
+
+function sliderValueToDb(value) {
+    const val = parseFloat(value);
+    if (val === 0) return -Infinity;
+    return (val - 50) * (val < 50 ? 0.8 : 0.24);
+}
+
+function initTrackVolume(id) {
+    if (trackVolumes[id]) return;
+    const slider = document.getElementById(`vol-${id}`);
+    const initialSliderVal = slider ? slider.value : 50;
+    if (mixBus) {
+        trackVolumes[id] = new Tone.Volume(sliderValueToDb(initialSliderVal)).connect(mixBus);
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    trackIds.forEach(id => { createTrackDOM(id, trackLabels[id]); });
+});
+
+function addNewTrackPrompt() {
+    const name = prompt("追加したい音源や楽器の名前を入力してください:", "Percussion");
+    if (name === null || name.trim() === "") return;
+    const id = "track_" + Date.now();
+    trackIds.push(id);
+    trackLabels[id] = "🎵 " + name;
+    createTrackDOM(id, trackLabels[id]);
+    if (mixBus) { initTrackVolume(id); }
+}
+
+function createTrackDOM(id, labelText) {
+    const container = document.getElementById('tracks-container');
+    const row = document.createElement('div');
+    row.classList.add('row');
+    row.id = `${id}-row`;
+    
+    row.innerHTML = `
+        <div class="track-control">
+            <div class="drop-zone" id="drop-${id}">${labelText}<br>を選択</div>
+            <div>🔊 <input type="range" class="vol-slider" id="vol-${id}" min="0" max="100" value="50"></div>
+        </div>
+        <input type="file" id="file-${id}" class="hidden-file-input" accept="audio/*">
+        <div class="step-container"></div>
+    `;
+    container.appendChild(row);
+    
+    const stepContainer = row.querySelector('.step-container');
+    for (let i = 0; i < STEP_COUNT; i++) {
+        const btn = document.createElement('div');
+        btn.classList.add('step');
+        btn.dataset.type = id;
+        btn.dataset.index = i;
+        btn.addEventListener('click', () => btn.classList.toggle('active'));
+        stepContainer.appendChild(btn);
+    }
+    row.querySelector('.vol-slider').addEventListener('input', (e) => {
+        initAudio();
+        if (trackVolumes[id]) { trackVolumes[id].volume.value = sliderValueToDb(e.target.value); }
+    });
+    setupTrack(id);
+}
+
+function applyPreset(patternName) {
+    document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+    if (patternName === 'clear') return;
+    const kickSteps = document.querySelectorAll('.step[data-type="kick"]');
+    const snareSteps = document.querySelectorAll('.step[data-type="snare"]');
+    const hatSteps = document.querySelectorAll('.step[data-type="hat"]');
+    if (kickSteps.length === 0 || snareSteps.length === 0 || hatSteps.length === 0) return;
+
+    for (let i = 0; i < 16; i++) {
+        if (patternName === 'fourFloor') {
+            if (i % 4 === 0) kickSteps[i].classList.add('active');
+            if (i === 4 || i === 12) snareSteps[i].classList.add('active');
+            if (i % 2 === 0) hatSteps[i].classList.add('active');
+        } 
+        else if (patternName === 'eightBeat') {
+            if (i === 0 || i === 2 || i === 8 || i === 10) kickSteps[i].classList.add('active');
+            if (i === 4 || i === 12) snareSteps[i].classList.add('active');
+            if (i % 2 === 0) hatSteps[i].classList.add('active');
+        } 
+        else if (patternName === 'sixteenBeat') {
+            if (i === 0 || i === 8) kickSteps[i].classList.add('active');
+            if (i === 4 || i === 12) snareSteps[i].classList.add('active');
+            hatSteps[i].classList.add('active');
+        }
+    }
+}
+
+function savePatternData() {
+    let fileName = prompt("保存するパターンデータ(.json)の名前を入力してください:", "rhythm-data1");
+    if (fileName === null) return;
+    if (fileName.trim() === "") fileName = "my-rhythm-pattern";
+    const patternData = {
+        bpm: document.getElementById('bpmInput').value,
+        fx: document.getElementById('fxSelect').value,
+        trackIds: trackIds, trackLabels: trackLabels, volumes: {}, steps: {}
+    };
+    trackIds.forEach(id => {
+        patternData.volumes[id] = document.getElementById(`vol-${id}`).value;
+        patternData.steps[id] = [];
+        document.querySelectorAll(`.step[data-type="${id}"]`).forEach(step => {
+            patternData.steps[id].push(step.classList.contains('active'));
+        });
+    });
+    const jsonString = JSON.stringify(patternData, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.download = `${fileName}.json`; anchor.href = url; anchor.click();
+}
+function loadPatternData(event) {
+    const file = event.target.files.item(0);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const patternData = JSON.parse(e.target.result);
+            if (patternData.trackIds) {
+                document.getElementById('tracks-container').innerHTML = "";
+                trackIds = patternData.trackIds;
+                Object.assign(trackLabels, patternData.trackLabels);
+                trackIds.forEach(id => { createTrackDOM(id, trackLabels[id]); });
+            }
+            initAudio();
+            if (patternData.bpm) { document.getElementById('bpmInput').value = patternData.bpm; Tone.Transport.bpm.value = patternData.bpm; }
+            if (patternData.fx) { document.getElementById('fxSelect').value = patternData.fx; applyFxChange(patternData.fx); }
+            trackIds.forEach(id => {
+                if (patternData.volumes && patternData.volumes[id]) {
+                    document.getElementById(`vol-${id}`).value = patternData.volumes[id];
+                    if(trackVolumes[id]) trackVolumes[id].volume.value = sliderValueToDb(patternData.volumes[id]);
+                }
+                if (patternData.steps && patternData.steps[id]) {
+                    const steps = document.querySelectorAll(`.step[data-type="${id}"]`);
+                    steps.forEach((step, index) => {
+                        if (patternData.steps[id][index]) step.classList.add('active');
+                        else step.classList.remove('active');
+                    });
+                }
+            });
+            alert('ミキサー設定を読み込みました！');
+        } catch (err) { alert('ファイルの読み込みに失敗しました。'); }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+}
+
+function setupTrack(type) {
+    const zone = document.getElementById(`drop-${type}`);
+    const fileInput = document.getElementById(`file-${type}`);
+    zone.addEventListener('click', () => { fileInput.click(); });
+    fileInput.addEventListener('change', (e) => { if (e.target.files && e.target.files.length > 0) { loadAudioFile(e.target.files.item(0), zone, type); } });
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('hover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('hover'));
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault(); zone.classList.remove('hover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { loadAudioFile(e.dataTransfer.files.item(0), zone, type); }
+    });
+}
+
+function loadAudioFile(file, zone, type) {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const buffer = await Tone.getContext().decodeAudioData(event.target.result);
+            buffers[type] = buffer; zone.textContent = file.name; zone.classList.add('loaded');
+        } catch (err) { alert('音声ファイルの読み込みに失敗しました。'); }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+Tone.Transport.scheduleRepeat((time) => {
+    document.querySelectorAll('.step').forEach(el => el.classList.remove('current'));
+    trackIds.forEach(type => {
+        const steps = document.querySelectorAll(`.step[data-type="${type}"]`);
+        if (steps[currentStep]) steps[currentStep].classList.add('current');
+        if (steps[currentStep] && steps[currentStep].classList.contains('active') && buffers[type]) {
+            initAudio();
+            const player = new Tone.Player(buffers[type]).connect(trackVolumes[type]);
+            if (document.getElementById('fxSelect').value === 'crush') { player.playbackRate = 0.5; }
+            player.start(time);
+        }
+    });
+    currentStep = (currentStep + 1) % STEP_COUNT;
+}, "16n");
+
+document.getElementById('playBtn').addEventListener('click', async () => {
+    await Tone.start(); initAudio();
+    if (isPlaying) { Tone.Transport.stop(); isPlaying = false; } 
+    else { Tone.Transport.start(); isPlaying = true; }
+});
+
+document.getElementById('bpmInput').addEventListener('input', (e) => { Tone.Transport.bpm.value = e.target.value; });
+document.getElementById('fxSelect').addEventListener('change', (e) => { initAudio(); applyFxChange(e.target.value); });
+function applyFxChange(fxType) {
+    if(!distortion || !reverb) return; distortion.wet.value = 0; reverb.wet.value = 0;
+    if (fxType === 'dist') distortion.wet.value = 1; else if (fxType === 'reverb') reverb.wet.value = 1;
+}
+
+// 【コア新設計：複数ループ連続書き出し対応】
+document.getElementById('recBtn').addEventListener('click', async () => {
+    const bpm = parseFloat(document.getElementById('bpmInput').value);
+    const fxType = document.getElementById('fxSelect').value;
+    
+    // 【変更】画面から選ばれたループ数を取得し、正確な総再生時間を計算
+    const loopCount = parseInt(document.getElementById('loopSelect').value);
+    const oneLoopDuration = (60 / bpm) * 4; 
+    const totalDuration = oneLoopDuration * loopCount; 
+    
+    const recBtn = document.getElementById('recBtn');
+    recBtn.textContent = `⚙ ${loopCount}ループ分を計算・書き出し中...`;
+    recBtn.classList.add('recording');
+
+    Tone.Offline(async (context) => {
+        const offlineMixBus = new Tone.Volume(0);
+        const offlineDist = new Tone.Distortion(0.5); offlineDist.wet.value = (fxType === 'dist' ? 1 : 0);
+        const offlineReverb = new Tone.Reverb(2.5); offlineReverb.wet.value = (fxType === 'reverb' ? 1 : 0);
+        
+        offlineMixBus.chain(offlineDist, offlineReverb, context.destination);
+        await offlineReverb.ready;
+
+        const offlineTrackVols = {};
+        trackIds.forEach(id => {
+            const sliderVal = document.getElementById(`vol-${id}`).value;
+            offlineTrackVols[id] = new Tone.Volume(sliderValueToDb(sliderVal)).connect(offlineMixBus);
+        });
+
+        const stepTime = (60 / bpm) / 4;
+
+        // 指定されたループ数（loopCount回）だけ、音の配置を繰り返す指示
+        for (let l = 0; l < loopCount; l++) {
+            // 現在のループの開始時間（秒）を割り出す
+            const loopOffset = l * oneLoopDuration;
+
+            trackIds.forEach(type => {
+                const steps = document.querySelectorAll(`.step[data-type="${type}"]`);
+                steps.forEach((step, index) => {
+                    if (step.classList.contains('active') && buffers[type]) {
+                        const player = new Tone.Player(buffers[type]).connect(offlineTrackVols[type]);
+                        if (fxType === 'crush') { player.playbackRate = 0.5; }
+                        
+                        // ループの開始時間に、各マスのタイミング（index * stepTime）を足してジャストで配置
+                        player.start(loopOffset + (index * stepTime));
+                    }
+                });
+            });
+        }
+    }, totalDuration).then(async (buffer) => {
+        const wavBlob = bufferToWav(buffer.get());
+        let wavName = prompt(`書き出すWAVファイル(${loopCount}ループ分)の名前を入力してください:`, `rhythm-loop-x${loopCount}`);
+        if (wavName !== null) {
+            if (wavName.trim() === "") wavName = "game-rhythm-loop";
+            const url = URL.createObjectURL(wavBlob);
+            const anchor = document.createElement("a");
+            anchor.download = `${wavName}.wav`; anchor.href = url; anchor.click();
+        }
+        recBtn.textContent = "💾 高音質WAVを書き出し・保存";
+        recBtn.classList.remove('recording');
+    });
+});
+
+function bufferToWav(audioBuffer) {
+    const numOfChan = audioBuffer.numberOfChannels; const sampleRate = audioBuffer.sampleRate;
+    const format = 1; const bitDepth = 16;
+    let result;
+    if (numOfChan === 2) { result = interleave(audioBuffer.getChannelData(0), audioBuffer.getChannelData(1)); } 
+    else { result = audioBuffer.getChannelData(0); }
+    const buffer = new ArrayBuffer(44 + result.length * 2); const view = new DataView(buffer);
+    writeString(view, 0, 'RIFF'); view.setUint32(4, 36 + result.length * 2, true); writeString(view, 8, 'WAVE'); writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, format, true); view.setUint16(22, numOfChan, true); view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numOfChan * (bitDepth / 8), true); view.setUint16(32, numOfChan * (bitDepth / 8), true); view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data'); view.setUint32(40, result.length * 2, true);
+    let lng = result.length; let index = 44;
+    for (let i = 0; i < lng; i++) {
+        let s = Math.max(-1, Math.min(1, result[i])); view.setInt16(index, s < 0 ? s * 0x8000 : s * 0x7FFF, true); index += 2;
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+function interleave(inputL, inputR) {
+    const length = inputL.length + inputR.length; const result = new Float32Array(length);
+    let index = 0; let inputIndex = 0;
+    while (index < length) { result[index++] = inputL[inputIndex]; result[index++] = inputR[inputIndex]; inputIndex++; }
+    return result;
+}
+function writeString(view, offset, string) { for (let i = 0; i < string.length; i++) { view.setUint8(offset + i, string.charCodeAt(i)); } }
+</script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8"><title>JS 2トラックBGM作曲メーカー</title>
+    <style>
+        body { font-family: sans-serif; background: #1e1e24; color: #fff; padding: 15px; max-width: 500px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
+        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.8rem; }
+        button.preset { background: #444; color: #ccc; }
+        .row { margin-bottom: 8px; display: flex; flex-direction: column; }
+        input, select { width: 100%; padding: 5px; box-sizing: border-box; background: #333; color: #fff; border: 1px solid #555; }
+        pre { background: #111; padding: 10px; max-height: 100px; overflow: auto; color: #a9ffb4; font-size: 0.7rem; }
+        .track-section { background: #2a2a35; padding: 8px; border-radius: 6px; margin-bottom: 15px; border-top: 4px solid #00bcd4; }
+        .t2-border { border-top-color: #ff9800; }
+        .seq-title { font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .seq-container { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; background: #1e1e24; padding: 5px; border-radius: 4px; margin-bottom: 5px; }
+        .note-box { display: flex; flex-direction: column; align-items: center; background: #2a2a35; padding: 3px 1px; border-radius: 3px; border: 1px solid #444; }
+        .note-box.active { border-color: #fff; background: #555; }
+        .note-num { font-size: 0.6rem; color: #aaa; }
+        .note-box select { font-size: 0.65rem; padding: 1px 0; background: #111; text-align: center; border: none; width: 100%; }
+        .t1-sel { color: #00bcd4; } .t2-sel { color: #ff9800; }
+    </style>
+</head>
+<body>
+    <h3>🎼 2トラック合奏BGM作曲メーカー</h3>
+    
+    <div class="grid">
+        <button class="preset" onclick="loadM('hero')">⚔️ 王道RPG合奏</button>
+        <button class="preset" onclick="loadM('stg')">🚀 疾走STG合奏</button>
+        <button class="preset" onclick="loadM('puzzle')">🧩 落ちゲー合奏</button>
+    </div>
+
+    <!-- トラック1：主旋律 -->
+    <div class="track-section">
+        <div class="seq-title" style="color:#00bcd4;">🎵 トラック1 (主旋律・メロディ) 
+            <select id="type1" onchange="up()" style="width:100px; padding:2px; font-size:0.75rem;"><option value="sine">sine</option><option value="square" selected>square</option><option value="sawtooth">sawtooth</option><option value="triangle">triangle</option></select>
+        </div>
+        <div class="seq-container" id="t1-seq1"></div><div class="seq-container" id="t1-seq2"></div>
+        <div class="seq-container" id="t1-seq3"></div><div class="seq-container" id="t1-seq4"></div>
+    </div>
+
+    <!-- トラック2：伴奏 -->
+    <div class="track-section t2-border">
+        <div class="seq-title" style="color:#ff9800;">🎸 トラック2 (伴奏・低音ベース) 
+            <select id="type2" onchange="up()" style="width:100px; padding:2px; font-size:0.75rem;"><option value="sine">sine</option><option value="square">square</option><option value="sawtooth">sawtooth</option><option value="triangle" selected>triangle</option></select>
+        </div>
+        <div class="seq-container" id="t2-seq1"></div><div class="seq-container" id="t2-seq2"></div>
+        <div class="seq-container" id="t2-seq3"></div><div class="seq-container" id="t2-seq4"></div>
+    </div>
+    
+    <div class="row" style="background:#344; padding:5px; border-radius:4px; border-left:4px solid #4caf50;">
+        <label>全体の音量: <span id="v-vol">40</span>%</label><input type="range" id="vol" min="0" max="100" step="5" value="40" oninput="up()">
+    </div>
+    <div class="row" style="background:#334; padding:5px; border-radius:4px; border-left:4px solid #e91e63;">
+        <label>BGMテンポ (速度): <span id="v-tempo">140</span></label><input type="range" id="tempo" min="60" max="240" step="5" value="140" oninput="up()" onchange="changeTempo()">
+    </div>
+    <div class="row"><label>エコーの強さ: <span id="v-echo">0.2</span></label><input type="range" id="echo" min="0" max="0.8" step="0.1" value="0.2" oninput="up()"></div>
+    
+    <button style="width:100%; margin-bottom:5px; background:#4caf50; color:#fff;" id="pBtn" onclick="togglePlay()">▶ BGMを再生する</button>
+    <button style="width:100%; background:#008cba; color:#fff;" onclick="dlWav()">📥 合奏曲を無限ループWAV保存</button>
+    <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;"><span>📋 2声合奏用の出力コード:</span><button style="background:#888; color:#fff; padding:2px 6px; font-size:0.7rem;" onclick="copyC()">コピー</button></div>
+    <pre id="cText"></pre>
+
+    <script>
+        const actx = new(window.AudioContext||window.webkitAudioContext)();
+        let isPlaying = false, timerId = null, stepIndex = 0;
+        const scaleTable = { "休": 0, "ド↓": 130.81, "ミ↓": 164.81, "ソ↓": 196.00, "ラ↓": 220.00, "ド": 261.63, "レ": 293.66, "ミ": 329.63, "ファ": 349.23, "ソ": 392.00, "ラ": 440.00, "シ": 493.88, "ド↑": 523.25, "レ↑": 587.33, "ミ↑": 659.25 };
+        let melody1 = new Array(32).fill(0), melody2 = new Array(32).fill(0);
+
+        const getV = (id) => (id==='type1'||id==='type2') ? document.getElementById(id).value : parseFloat(document.getElementById(id).value);
+        function up() { ['vol','tempo','echo'].forEach(k => { document.getElementById('v-'+k).textContent = document.getElementById(k).value; }); readSeq(); genC(); }
+        function copyC() { navigator.clipboard.writeText(document.getElementById('cText').textContent); }
+
+        function buildSequencerUI() {
+            for (let t = 1; t <= 2; t++) {
+                for (let i = 0; i < 32; i++) {
+                    const targetContainer = document.getElementById(`t${t}-seq` + (Math.floor(i / 8) + 1));
+                    const box = document.createElement('div');
+                    box.className = 'note-box'; box.id = `t${t}-box-` + i;
+                    box.innerHTML = `<span class="note-num">${i+1}</span><select id="t${t}-s-${i}" class="${t===1?'t1-sel':'t2-sel'}"></select>`;
+                    targetContainer.appendChild(box);
+                    const select = document.getElementById(`t${t}-s-` + i);
+                    select.addEventListener('change', up);
+                    Object.keys(scaleTable).forEach(name => {
+                        const opt = document.createElement('option'); opt.value = scaleTable[name]; opt.textContent = name;
+                        select.appendChild(opt);
+                    });
+                }
+            }
+        }
+        buildSequencerUI();
+        function readSeq() { for (let i = 0; i < 32; i++) { melody1[i] = parseFloat(document.getElementById('t1-s-' + i).value); melody2[i] = parseFloat(document.getElementById('t2-s-' + i).value); } }
+
+        function playNote(ctx, freq, type, echo, vol, time, duration) {
+            if (freq === 0) return;
+            const osc = ctx.createOscillator(), gain = ctx.createGain(), mG = ctx.createGain();
+            mG.connect(ctx.destination);
+            
+            // 🔴 改善：和音用のノイズ低減マイルド音量設定
+            let factor = 0.05; if (type === 'sine') factor = 0.20; else if (type === 'triangle') factor = 0.15;
+            if (freq < 200 && (type === 'sine' || type === 'triangle')) factor *= 2.2;
+            mG.gain.setValueAtTime(factor * (vol / 100), time);
+            
+            // 🔴 改善：フェードアウトを元の長さ（エコー余裕あり）に引き伸ばし高音質化
+            const trail = echo > 0 ? (echo * 2.5) : 0;
+            mG.gain.exponentialRampToValueAtTime(0.001, time + duration + trail);
+
+            let out = mG; if (echo > 0) {
+                const d = ctx.createDelay(); d.delayTime.setValueAtTime(0.15, time);
+                const f = ctx.createGain(); f.gain.setValueAtTime(echo, time);
+                d.connect(f); f.connect(d); f.connect(mG); out = d;
+            }
+            osc.type = type; osc.frequency.setValueAtTime(freq, time);
+            osc.connect(gain); gain.connect(mG); gain.connect(out);
+            osc.start(time); osc.stop(time + duration);
+        }
+        function changeTempo() {
+            if (!isPlaying) return;
+            clearInterval(timerId);
+            const stepTime = 60 / getV('tempo') / 2;
+            timerId = setInterval(() => {
+                readSeq();
+                document.querySelectorAll('.note-box').forEach(b => b.classList.remove('active'));
+                document.getElementById('t1-box-' + stepIndex).classList.add('active');
+                document.getElementById('t2-box-' + stepIndex).classList.add('active');
+                
+                playNote(actx, melody1[stepIndex], getV('type1'), getV('echo'), getV('vol'), actx.currentTime, stepTime * 0.9);
+                playNote(actx, melody2[stepIndex], getV('type2'), getV('echo'), getV('vol'), actx.currentTime, stepTime * 0.9);
+                stepIndex = (stepIndex + 1) % melody1.length;
+            }, stepTime * 1000);
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                clearInterval(timerId); isPlaying = false;
+                document.getElementById('pBtn').textContent = '▶ BGMを再生する';
+                document.querySelectorAll('.note-box').forEach(b => b.classList.remove('active'));
+            } else {
+                if (actx.state==='suspended') actx.resume();
+                isPlaying = true; stepIndex = 0;
+                document.getElementById('pBtn').textContent = '⏹ 停止する';
+                changeTempo();
+            }
+        }
+
+        function genC() {
+            const vl = getV('vol'), tm = getV('tempo'), ec = getV('echo'), ty1 = getV('type1'), ty2 = getV('type2');
+            let ecC = ec > 0 ? `const d=ctx.createDelay(), f=ctx.createGain(); d.delayTime.setValueAtTime(0.15,now); f.gain.setValueAtTime(${ec},now); d.connect(f); f.connect(d); mG.connect(d?d:mG);` : '';
+            document.getElementById('cText').textContent = `function startPolyBGM() {
+    const ctx = new AudioContext(), m1 = [${melody1.join(',')}], m2 = [${melody2.join(',')}];
+    let idx = 0, step = ${60 / tm / 2};
+    setInterval(() => {
+        const f1 = m1[idx], f2 = m2[idx]; idx = (idx + 1) % m1.length;
+        const play = (freq, ty) => {
+            if (freq === 0) return;
+            const osc = ctx.createOscillator(), gain = ctx.createGain(), mG = ctx.createGain(), now = ctx.currentTime;
+            mG.connect(ctx.destination); let fac = 0.05; if (ty==='sine') fac=0.20; else if (ty==='triangle') fac=0.15;
+            if (freq < 200 && (ty==='sine'||ty==='triangle')) fac *= 2.2;
+            mG.gain.setValueAtTime(fac*(${vl/100}), now); mG.gain.exponentialRampToValueAtTime(0.001, now + step * 0.9 + ${ec > 0 ? (ec * 2.5).toFixed(1) : 0});
+            ${ecC} const out = ${ec > 0 ? 'd' : 'mG'}; osc.type = ty; osc.frequency.setValueAtTime(freq, now);
+            osc.connect(gain); gain.connect(mG); gain.connect(out); osc.start(now); osc.stop(now+step*0.9);
+        };
+        play(f1, '${ty1}'); play(f2, '${ty2}');
+    }, step * 1000);
+}`;
+        }
+
+        // 🔴 改善：32音2トラックの重なりを贅沢に計算したあと、32ステップ目のジャストサイズで綺麗にWAVを切り取るロジック
+        function dlWav() {
+            readSeq();
+            const vl = getV('vol'), tm = getV('tempo'), ec = getV('echo'), ty1 = getV('type1'), ty2 = getV('type2'), rate = 44100, step = 60 / tm / 2;
+            const paddingD = ec > 0 ? ec * 2.5 : 0.5;
+            const fullD = step * melody1.length + paddingD;
+            const octx = new OfflineAudioContext(1, rate * fullD, rate);
+            
+            for(let i=0; i<melody1.length; i++) { 
+                playNote(octx, melody1[i], ty1, ec, vl, step * i, step * 0.9); 
+                playNote(octx, melody2[i], ty2, ec, vl, step * i, step * 0.9); 
+            }
+            octx.startRendering().then(buf => {
+                // 💡 計算されたフル画像から32ステップ分のジャストサイズだけを綺麗に切り抜き
+                const targetLength = Math.floor(rate * (step * melody1.length));
+                let res = buf.getChannelData(0).subarray(0, targetLength);
+                
+                const bl = res.length * 2;
+                const ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
+                const wS = (o, s) => { for (let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
+                wS(0, 'RIFF'); v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); wS(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); wS(36, 'data'); v.setUint32(40, bl, true);
+                for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `duet_perfect_loop.wav`; a.click();
+            });
+        }
+
+        const mPresets = {
+            hero: {
+                t1: [261.63, 329.63, 392.00, 523.25, 493.88, 392.00, 440.00, 0, 440.00, 392.00, 349.23, 329.63, 293.66, 0, 0, 0, 261.63, 329.63, 392.00, 523.25, 493.88, 587.33, 523.25, 0, 440.00, 523.25, 392.00, 329.63, 293.66, 329.63, 261.63, 0],
+                t2: [130.81, 0, 164.81, 0, 196.00, 0, 220.00, 0, 220.00, 0, 196.00, 0, 164.81, 0, 130.81, 0, 130.81, 0, 164.81, 0, 196.00, 0, 220.00, 0, 164.81, 0, 196.00, 0, 130.81, 0, 130.81, 0]
+            },
+            stg: {
+                t1: [440.00, 440.00, 523.25, 523.25, 587.33, 587.33, 659.25, 0, 587.33, 587.33, 523.25, 523.25, 440.00, 440.00, 392.00, 0, 440.00, 440.00, 523.25, 523.25, 587.33, 587.33, 659.25, 0, 659.25, 587.33, 523.25, 440.00, 587.33, 523.25, 440.00, 0],
+                t2: [220.00, 220.00, 220.00, 220.00, 196.00, 196.00, 196.00, 196.00, 220.00, 220.00, 220.00, 220.00, 164.81, 164.81, 164.81, 164.81, 220.00, 220.00, 220.00, 220.00, 196.00, 196.00, 196.00, 196.00, 164.81, 164.81, 196.00, 196.00, 220.00, 220.00, 220.00, 220.00]
+            },
+            puzzle: {
+                t1: [440.00, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66, 440.00, 440.00, 349.23, 523.25, 0, 493.88, 440.00, 392.00, 0, 329.63, 0, 349.23, 392.00, 523.25, 349.23, 329.63, 0, 293.66, 261.63, 293.66, 329.63, 440.00, 0, 0, 0],
+                t2: [220.00, 196.00, 220.00, 196.00, 220.00, 196.00, 220.00, 0, 164.81, 0, 196.00, 0, 220.00, 196.00, 164.81, 0, 196.00, 0, 220.00, 0, 164.81, 0, 196.00, 0, 130.81, 0, 164.81, 0, 220.00, 196.00, 220.00, 0]
+            }
+        };
+        const tPresets = { hero: 130, stg: 160, puzzle: 140 };
+
+        function loadM(n) {
+            const p = mPresets[n]; document.getElementById('tempo').value = tPresets[n];
+            document.getElementById('type1').value = (n==='hero'||n==='puzzle') ? 'square' : 'sawtooth';
+            document.getElementById('type2').value = 'triangle';
+            for (let t = 1; t <= 2; t++) {
+                const trData = p[`t${t}`];
+                for (let i = 0; i < 32; i++) {
+                    const select = document.getElementById(`t${t}-s-` + i);
+                    let closest = 0, minDiff = Infinity;
+                    for (let opt of select.options) {
+                        let diff = Math.abs(parseFloat(opt.value) - trData[i]);
+                        if (diff < minDiff) { minDiff = diff; closest = opt.value; }
+                    }
+                    select.value = closest;
+                }
+            }
+            if(isPlaying){ changeTempo(); } else { up(); }
+        }
+        loadM('hero');
+    </script>
+</body>
+</html>
