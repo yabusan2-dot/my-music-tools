@@ -1,20 +1,26 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8"><title>JSループBGMメーカー</title>
+    <meta charset="UTF-8"><title>JSループBGMメーカー(フレーズ数可変版)</title>
     <style>
         body { font-family: sans-serif; background: #1e1e24; color: #fff; padding: 15px; max-width: 450px; margin: 0 auto; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 15px; }
-        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.85rem; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 12px; }
+        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.82rem; }
         button.preset { background: #444; color: #ccc; }
         button.preset:hover { background: #555; color: #fff; }
         .row { margin-bottom: 10px; display: flex; flex-direction: column; }
         input, select { width: 100%; padding: 5px; box-sizing: border-box; background: #333; color: #fff; border: 1px solid #555; }
         pre { background: #111; padding: 10px; max-height: 120px; overflow: auto; color: #a9ffb4; font-size: 0.75rem; }
+        
+        /* 🎛️ 拍子・フレーズ数切り替え用のスタイル */
+        .mode-container { display: flex; gap: 5px; margin-bottom: 8px; background: #2a2a35; padding: 4px; border-radius: 4px; }
+        .mode-btn { flex: 1; background: #3a3a4a; color: #aaa; padding: 6px; font-size: 0.78rem; }
+        .mode-btn.active { background: #ff9800; color: #1e1e24; }
+        .phrase-btn.active { background: #4caf50; color: #fff; }
     </style>
 </head>
 <body>
-    <h3>🎵 ループBGMメーカー</h3>
+    <h3>🎵 ループBGMメーカー (フレーズ数可変版)</h3>
     
     <div class="grid">
         <button class="preset" onclick="loadM('hero')">⚔️ 勇者(王道)</button>
@@ -23,6 +29,20 @@
         <button class="preset" onclick="loadM('stg')">🚀 STG(疾走)</button>
         <button class="preset" onclick="loadM('battle')">🥊 対戦(緊迫)</button>
         <button class="preset" onclick="loadM('puzzle')">🧩 落ちゲー(中毒)</button>
+    </div>
+
+    <!-- 🄳 拍子切り替えスイッチ -->
+    <div class="mode-container">
+        <button id="m-4" class="mode-btn active" onclick="changeMeter(4)">𝄴 4拍子モード</button>
+        <button id="m-3" class="mode-btn" onclick="changeMeter(3)">𝄳 3拍子モード</button>
+    </div>
+
+    <!-- 🌟 新設：フレーズ数（小節数）切り替えスイッチ -->
+    <div class="mode-container">
+        <button id="p-1" class="mode-btn phrase-btn active" onclick="changePhrase(1)">1フレーズ</button>
+        <button id="p-2" class="mode-btn phrase-btn" onclick="changePhrase(2)">2フレーズ</button>
+        <button id="p-3" class="mode-btn phrase-btn" onclick="changePhrase(3)">3フレーズ</button>
+        <button id="p-4" class="mode-btn phrase-btn" onclick="changePhrase(4)">4フレーズ</button>
     </div>
     
     <div class="row" style="background:#344; padding:5px; border-radius:4px; border-left:4px solid #4caf50;">
@@ -46,7 +66,10 @@
     <script>
         const actx = new(window.AudioContext||window.webkitAudioContext)();
         let isPlaying = false, timerId = null, stepIndex = 0;
-        let melody = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66];
+        let currentMeter = 4;   // 4 または 3 拍子
+        let currentPhrase = 1;  // 1 〜 4 フレーズ
+        let currentPreset = 'hero';
+        let melody = []; // 動的に長さが変わる配列
 
         const getV = (id) => id==='type' ? document.getElementById(id).value : parseFloat(document.getElementById(id).value);
         function up() { ['vol','tempo','echo'].forEach(k => { document.getElementById('v-'+k).textContent = document.getElementById(k).value; }); genC(); }
@@ -56,17 +79,11 @@
             if (freq === 0) return;
             const osc = ctx.createOscillator(), gain = ctx.createGain(), mG = ctx.createGain();
             mG.connect(ctx.destination);
-            
             const vRatio = vol / 100;
-            // 🔴 改善：複数の音が重なっても音が割れないよう、基準の音量をマイルド（0.06〜）に再調整
             let factor = 0.06; if (type === 'sine') factor = 0.24; else if (type === 'triangle') factor = 0.18;
             if (freq < 200) { if (type === 'sine') factor *= 3.5; else if (type === 'triangle') factor *= 2.2; }
-            
             mG.gain.setValueAtTime(factor * vRatio, time);
-            
-            // 🔴 改善：フェードアウト時間を元の綺麗な残響（duration + エコー余韻）に戻してノイズを除去
-            const trail = echo > 0 ? (echo * 2.5) : 0;
-            mG.gain.exponentialRampToValueAtTime(0.001, time + duration + trail);
+            mG.gain.exponentialRampToValueAtTime(0.001, time + duration + (echo > 0 ? (echo * 2.5) : 0));
 
             let out = mG; if (echo > 0) {
                 const d = ctx.createDelay(); d.delayTime.setValueAtTime(0.28, time);
@@ -83,7 +100,7 @@
             const stepTime = 60 / getV('tempo') / 2;
             timerId = setInterval(() => {
                 playNote(actx, melody[stepIndex], getV('type'), getV('echo'), getV('vol'), actx.currentTime, stepTime * 0.9);
-                stepIndex = (stepIndex + 1) % melody.length;
+                stepIndex = (stepIndex + 1) % melody.length; // 🔴 拍子×フレーズ数のジャストの長さでループ
             }, stepTime * 1000);
         }
 
@@ -111,7 +128,7 @@
         mG.connect(ctx.destination); let factor = 0.06; if ('${ty}'==='sine') factor=0.24; else if ('${ty}'==='triangle') factor=0.18;
         if (freq < 200) { if ('${ty}' === 'sine') factor *= 3.5; else if ('${ty}' === 'triangle') factor *= 2.2; }
         const bVol = factor * (${vl / 100});
-        mG.gain.setValueAtTime(bVol, now); mG.gain.exponentialRampToValueAtTime(0.001, now + step * 0.9 + ${ec>0?(ec*2.5).toFixed(1):0});
+        mG.gain.setValueAtTime(bVol, now); mG.gain.exponentialRampToValueAtTime(0.001, now+step*0.9+${ec > 0 ? (ec * 2.5).toFixed(1) : 0});
         ${ecC} const out = ${ec > 0 ? 'd' : 'mG'}; osc.type = '${ty}'; osc.frequency.setValueAtTime(freq, now);
         osc.connect(gain); gain.connect(mG); gain.connect(out); osc.start(now); osc.stop(now+step*0.9);
     }, step * 1000);
@@ -120,45 +137,74 @@
 
         function dlWav() {
             const vl = getV('vol'), tm = getV('tempo'), ec = getV('echo'), ty = getV('type'), rate = 44100, step = 60 / tm / 2;
-            
-            // 💡 解決の鍵：WAVのファイル自体の器は「エコーの残響まで含めた少し長めのサイズ」で贅沢に作成する（音切れ・プチプチ防止）
             const paddingD = ec > 0 ? ec * 2.5 : 0.5;
             const fullD = step * melody.length + paddingD;
             const octx = new OfflineAudioContext(1, rate * fullD, rate);
-            
             for(let i=0; i<melody.length; i++) { playNote(octx, melody[i], ty, ec, vl, step * i, step * 0.9); }
-            
             octx.startRendering().then(buf => {
-                // 💡 解決の鍵：録音した贅沢なデータから、「1ループジャスト（無音なし）」の長さのデータだけをミリ秒単位で綺麗に抽出
-                const targetLength = Math.floor(rate * (step * melody.length));
-                let res = buf.getChannelData(0).subarray(0, targetLength); // ここでジャストサイズにカット！
-                
-                const bl = res.length * 2;
-                const ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
+                const targetLength = Math.floor(rate * (step * melody.length)); // 🔴 選択したフレーズ数ジャストにカット！
+                let res = buf.getChannelData(0).subarray(0, targetLength);
+                const bl = res.length * 2, ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
                 const wS = (o, s) => { for (let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
-                
                 wS(0, 'RIFF'); v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); wS(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); wS(36, 'data'); v.setUint32(40, bl, true);
                 for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
-                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `bgm_clean_loop.wav`; a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `bgm_${currentMeter}beat_${currentPhrase}phrase.wav`; a.click();
             });
         }
 
-        const mPresets = {
-            hero: [261.63, 329.63, 392.00, 523.25, 493.88, 392.00, 440.00, 0],
-            town: [329.63, 349.23, 392.00, 0, 349.23, 329.63, 293.66, 0],
-            dark: [130.81, 138.59, 146.83, 0, 146.83, 138.59, 130.81, 0],
-            stg: [440.00, 523.25, 587.33, 659.25, 587.33, 523.25, 440.00, 0],
-            battle: [220.00, 233.08, 220.00, 233.08, 329.63, 311.13, 220.00, 0],
-            puzzle: [440.00, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66, 440.00]
+        // 🎼 4拍子と3拍子の最大4小節（32音）分のフルサイズ楽譜データ
+        const fullDatabase = {
+            4: {
+                hero: [261.63, 329.63, 392.00, 523.25, 493.88, 392.00, 440.00, 0,  440.00, 392.00, 349.23, 329.63, 293.66, 0, 0, 0,  261.63, 329.63, 392.00, 523.25, 493.88, 587.33, 523.25, 0,  440.00, 523.25, 392.00, 329.63, 293.66, 329.63, 261.63, 0],
+                town: [329.63, 349.23, 392.00, 0, 349.23, 329.63, 293.66, 0,  293.66, 329.63, 349.23, 0, 329.63, 293.66, 261.63, 0,  329.63, 349.23, 392.00, 0, 349.23, 392.00, 440.00, 0,  440.00, 392.00, 349.23, 329.63, 293.66, 392.00, 329.63, 0],
+                dark: [130.81, 138.59, 146.83, 0, 146.83, 138.59, 130.81, 0,  146.83, 164.81, 164.81, 0, 146.83, 138.59, 130.81, 0,  130.81, 138.59, 146.83, 0, 164.81, 196.00, 164.81, 0,  146.83, 138.59, 130.81, 138.59, 146.83, 0, 130.81, 0],
+                stg: [440.00, 523.25, 587.33, 659.25, 587.33, 523.25, 440.00, 0,  587.33, 587.33, 523.25, 523.25, 440.00, 440.00, 392.00, 0,  440.00, 523.25, 587.33, 659.25, 587.33, 659.25, 698.46, 0,  698.46, 659.25, 587.33, 523.25, 587.33, 523.25, 440.00, 0],
+                battle: [220.00, 233.08, 220.00, 233.08, 329.63, 311.13, 220.00, 0,  293.66, 293.66, 311.13, 293.66, 233.08, 220.00, 196.00, 0,  220.00, 233.08, 220.00, 233.08, 329.63, 349.23, 392.00, 0,  392.00, 349.23, 329.63, 311.13, 220.00, 233.08, 220.00, 0],
+                puzzle: [440.00, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66, 440.00,  440.00, 349.23, 523.25, 0, 493.88, 440.00, 392.00, 0,  329.63, 0, 349.23, 392.00, 523.25, 349.23, 329.63, 0,  293.66, 261.63, 293.66, 329.63, 440.00, 0, 0, 0]
+            },
+            3: {
+                hero: [261.63, 392.00, 392.00, 329.63, 440.00, 440.00,  349.23, 440.00, 440.00, 392.00, 523.25, 0,  261.63, 392.00, 392.00, 329.63, 440.00, 440.00,  523.25, 493.88, 440.00, 392.00, 261.63, 0],
+                town: [329.63, 392.00, 0, 293.66, 349.23, 0,  261.63, 329.63, 0, 293.66, 392.00, 0,  329.63, 392.00, 0, 349.23, 440.00, 0,  440.00, 392.00, 349.23, 329.63, 261.63, 0],
+                dark: [130.81, 146.83, 146.83, 138.59, 130.81, 0,  146.83, 164.81, 164.81, 146.83, 138.59, 0,  130.81, 146.83, 146.83, 164.81, 196.00, 0,  196.00, 164.81, 146.83, 138.59, 130.81, 0],
+                stg: [440.00, 587.33, 523.25, 440.00, 523.25, 587.33,  587.33, 659.25, 587.33, 523.25, 440.00, 0,  440.00, 587.33, 523.25, 440.00, 523.25, 659.25,  698.46, 659.25, 587.33, 523.25, 440.00, 0],
+                battle: [220.00, 220.00, 233.08, 220.00, 329.63, 311.13,  293.66, 293.66, 311.13, 293.66, 233.08, 0,  220.00, 220.00, 233.08, 220.00, 349.23, 329.63,  392.00, 349.23, 329.63, 311.13, 220.00, 0],
+                puzzle: [440.00, 329.63, 349.23, 392.00, 349.23, 329.63,  293.66, 440.00, 440.00, 349.23, 523.25, 0,  329.63, 0, 349.23, 392.00, 523.25, 349.23,  329.63, 0, 293.66, 261.63, 293.66, 329.63]
+            }
         };
         const tPresets = { hero: 130, town: 100, dark: 90, stg: 160, battle: 145, puzzle: 150 };
 
-        function loadM(n) { 
-            melody = mPresets[n]; 
-            document.getElementById('tempo').value = tPresets[n];
-            up(); if(isPlaying){ changeTempo(); } 
+        // 🌟 核心：現在の「拍子」と「フレーズ数」から、配列をジャストの長さに切り出す関数
+        function sliceMelody() {
+            const notesPerMeasure = (currentMeter === 4) ? 8 : 6; // 1小節の音符数
+            const totalNotes = notesPerMeasure * currentPhrase;   // 総音符数
+            const fullTrack = fullDatabase[currentMeter][currentPreset];
+            melody = fullTrack.slice(0, totalNotes); // 指定の長さで綺麗にカット
         }
-        up();
+
+        function loadM(n) { 
+            currentPreset = n;
+            document.getElementById('tempo').value = tPresets[n];
+            sliceMelody(); up();
+            if(isPlaying){ changeTempo(); } 
+        }
+
+        function changeMeter(m) {
+            currentMeter = m;
+            document.getElementById('m-4').classList.toggle('active', m === 4);
+            document.getElementById('m-3').classList.toggle('active', m === 3);
+            stepIndex = 0; sliceMelody(); up();
+            if(isPlaying) { changeTempo(); }
+        }
+
+        // 🌟 新設：フレーズ数ボタンが押された時の処理
+        function changePhrase(p) {
+            currentPhrase = p;
+            for(let i=1; i<=4; i++) { document.getElementById('p-'+i).classList.toggle('active', i === p); }
+            stepIndex = 0; sliceMelody(); up();
+            if(isPlaying) { changeTempo(); }
+        }
+
+        loadM('hero');
     </script>
 </body>
 </html>
