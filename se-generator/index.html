@@ -3,14 +3,21 @@
 <head>
     <meta charset="UTF-8"><title>JS効果音メーカー</title>
     <style>
-        body { font-family: sans-serif; background: #222; color: #fff; padding: 15px; max-width: 450px; margin: 0 auto; }
+        body { font-family: sans-serif; background: #1e1e24; color: #fff; padding: 15px; max-width: 450px; margin: 0 auto; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 15px; }
-        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; }
-        .preset { background: #444; color: #ccc; }
+        button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.85rem; }
+        button.preset { background: #444; color: #ccc; }
+        button.preset:hover { background: #555; color: #fff; }
         .row { margin-bottom: 10px; display: flex; flex-direction: column; }
         input, select { width: 100%; padding: 5px; box-sizing: border-box; background: #333; color: #fff; border: 1px solid #555; }
         .favs { background: #333; padding: 8px; max-height: 80px; overflow-y: auto; margin-bottom: 15px; font-size: 0.85rem; }
         pre { background: #111; padding: 10px; max-height: 120px; overflow: auto; color: #a9ffb4; font-size: 0.75rem; }
+        
+        /* 🎨 波形図・変化図表示用の共通スタイル */
+        .wave-ui-group { display: flex; gap: 10px; align-items: center; }
+        .wave-preview-box { width: 60px; height: 34px; background: #111; border: 1px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+        .wave-svg { stroke: #00bcd4; stroke-width: 2; fill: none; }
+        .ramp-svg { stroke: #ff9800; stroke-width: 2; fill: none; } /* 変化図はオレンジ色に */
     </style>
 </head>
 <body>
@@ -29,28 +36,91 @@
     </div>
     <div class="favs" id="fList"></div>
     <div class="row" style="background:#334; padding:5px; border-radius:4px; border-left:4px solid #e91e63;">
-        <label>エコーの強さ: <span id="v-echo">0.4</span></label>
-        <input type="range" id="echo" min="0" max="0.8" step="0.1" value="0.4" oninput="up()" onchange="play()">
+        <label>エコーの強さ: <span id="v-echo">0.6</span></label>
+        <input type="range" id="echo" min="0" max="0.8" step="0.1" value="0.6" oninput="up()" onchange="play()">
     </div>
     <div class="row"><label>ノイズ比: <span id="v-nMix">0.0</span></label><input type="range" id="nMix" min="0" max="1" step="0.1" value="0" oninput="up()" onchange="play()"></div>
-    <div class="row"><label>波形</label><select id="type" onchange="up();play()"><option value="sine">sine</option><option value="square" selected>square</option><option value="sawtooth">sawtooth</option><option value="triangle">triangle</option></select></div>
-    <div class="row"><label>始動周波数(Hz): <span id="v-sF">587</span></label><input type="range" id="sF" min="40" max="2000" step="10" value="587" oninput="up()" onchange="play()"></div>
-    <div class="row"><label>終了周波数(Hz): <span id="v-eF">880</span></label><input type="range" id="eF" min="40" max="2000" step="10" value="880" oninput="up()" onchange="play()"></div>
-    <div class="row"><label>長さ(秒): <span id="v-dur">0.3</span></label><input type="range" id="dur" min="0.05" max="2" step="0.05" value="0.3" oninput="up()" onchange="play()"></div>
-    <div class="row"><label>変化型</label><select id="ramp" onchange="up();play()"><option value="linear">linear</option><option value="exponential">exponential</option><option value="jump" selected>jump</option></select></div>
+    
+    <!-- トーン波形UI -->
+    <div class="row">
+        <label>波形（音色）</label>
+        <div class="wave-ui-group">
+            <select id="type" onchange="drawWaveIcon(); up(); play();" style="flex: 1;">
+                <option value="sine">sine（滑らか・丸い波）</option>
+                <option value="square">square（ピコピコ・四角波）</option>
+                <option value="sawtooth">sawtooth（ギザギザ・のこぎり波）</option>
+                <option value="triangle">triangle（ファミコン・三角波）</option>
+            </select>
+            <div class="wave-preview-box" id="wavePreview"></div>
+        </div>
+    </div>
+
+    <div class="row"><label>始動周波数(Hz): <span id="v-sF">150</span></label><input type="range" id="sF" min="40" max="2000" step="10" value="150" oninput="drawRampIcon(); up();" onchange="play()"></div>
+    <div class="row"><label>終了周波数(Hz): <span id="v-eF">600</span></label><input type="range" id="eF" min="40" max="2000" step="10" value="600" oninput="drawRampIcon(); up();" onchange="play()"></div>
+    <div class="row"><label>長さ(秒): <span id="v-dur">0.35</span></label><input type="range" id="dur" min="0.05" max="2" step="0.05" value="0.35" oninput="up()" onchange="play()"></div>
+    
+    <div class="row">
+        <label>変化型（周波数の変化）</label>
+        <div class="wave-ui-group">
+            <select id="ramp" onchange="drawRampIcon(); up(); play();" style="flex: 1;">
+                <option value="linear">linear（直線的な変化）</option>
+                <option value="exponential" selected>exponential（なめらかな変化）</option>
+                <option value="jump">jump（途中で一瞬で跳ねる）</option>
+            </select>
+            <!-- ここにJavaScriptで変化図が描画されます -->
+            <div class="wave-preview-box" id="rampPreview"></div>
+        </div>
+    </div>
+    
     <button style="width:100%; margin-bottom:5px;" onclick="play()">▶ 試聴する</button>
     <button style="width:100%; background:#008cba; color:#fff;" onclick="dlWav()">📥 WAV保存</button>
     <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;"><span>📋 出力コード:</span><button style="background:#4caf50; color:#fff; padding:2px 6px; font-size:0.7rem;" onclick="copyC()">コピー</button></div>
     <pre id="cText"></pre>
 
     <script>
-        const actx = new(window.AudioContext||window.webkitAudioContext)(); let pName = 'coin';
+        const actx = new(window.AudioContext||window.webkitAudioContext)(); let pName = 'jump';
         const getV = (id) => (id==='type'||id==='ramp') ? document.getElementById(id).value : parseFloat(document.getElementById(id).value);
         function up() { ['echo','nMix','sF','eF','dur'].forEach(k => { document.getElementById('v-'+k).textContent = document.getElementById(k).value; }); genC(); }
         function copyC() { navigator.clipboard.writeText(document.getElementById('cText').textContent); }
+        
+        function drawWaveIcon() {
+            const type = document.getElementById('type').value;
+            const container = document.getElementById('wavePreview');
+            let path = "";
+            if (type === 'sine') path = "M 5,17 Q 17,2 30,17 T 55,17";
+            else if (type === 'square') path = "M 5,27 L 5,7 L 30,7 L 30,27 L 55,27";
+            else if (type === 'sawtooth') path = "M 5,27 L 30,7 L 30,27 L 55,7";
+            else if (type === 'triangle') path = "M 5,27 L 17,7 L 42,27 L 55,7";
+            container.innerHTML = `<svg width="60" height="34"><path d="${path}" class="wave-svg"/></svg>`;
+        }
+
+        // 🎨 新設：選択された変化型（Ramp）と始動・終了周波数（上下関係）をSVGで描画するロジック
+        function drawRampIcon() {
+            const ramp = document.getElementById('ramp').value;
+            const sF = getV('sF'); const eF = getV('eF');
+            const container = document.getElementById('rampPreview');
+            
+            // 周波数の高低によってグラフのスタート・ゴール地点の上下を入れ替える
+            const isUp = eF >= sF;
+            const yStart = isUp ? 27 : 7;
+            const yEnd = isUp ? 7 : 27;
+            
+            let path = "";
+            if (ramp === 'linear') {
+                path = `M 10,${yStart} L 50,${yEnd}`; // まっすぐな直線
+            } else if (ramp === 'exponential') {
+                // カーブを描く（上るか下るかで制御点を変える）
+                path = isUp ? `M 10,27 Q 45,27 50,7` : `M 10,7 Q 15,27 50,27`;
+            } else if (ramp === 'jump') {
+                // コイン音のような階段状の動き（25%の位置で跳ねる）
+                path = `M 10,${yStart} L 20,${yStart} L 20,${yEnd} L 50,${yEnd}`;
+            }
+            container.innerHTML = `<svg width="60" height="34"><path d="${path}" class="ramp-svg"/></svg>`;
+        }
+
         function sGraph(ctx, echo, nMix, type, sF, eF, dur, ramp) {
             const mG = ctx.createGain(); mG.connect(ctx.destination); const now = ctx.currentTime;
-            mG.gain.setValueAtTime(0.2, now); mG.gain.exponentialRampToValueAtTime(0.001, now + dur + (echo > 0 ? 1.0 : 0));
+            mG.gain.setValueAtTime(0.28, now); mG.gain.exponentialRampToValueAtTime(0.001, now + dur + (echo > 0 ? 1.0 : 0));
             let dNode = null, fG = null;
             if (echo > 0) {
                 dNode = ctx.createDelay(); dNode.delayTime.setValueAtTime(0.12, now);
@@ -60,10 +130,13 @@
             const outNode = dNode ? dNode : mG;
             let nS = null; if (nMix > 0) {
                 nS = ctx.createBufferSource(); const rate = ctx.sampleRate, size = rate * dur, buf = ctx.createBuffer(1, size, rate), d = buf.getChannelData(0);
-                for(let i=0; i<size; i++) d[i] = Math.random()*2-1; nS.buffer = buf; const nG = ctx.createGain(); nG.gain.setValueAtTime(nMix, now); nS.connect(nG); nG.connect(mG); nG.connect(outNode);
+                for(let i=0; i<size; i++) d[i] = Math.random()*2-1; nS.buffer = buf; 
+                const nG = ctx.createGain(); nG.gain.setValueAtTime(nMix * 1.5, now); nS.connect(nG); nG.connect(mG); nG.connect(outNode);
             }
             let osc = null; if (1 - nMix > 0) {
-                osc = ctx.createOscillator(); const tG = ctx.createGain(); tG.gain.setValueAtTime(1 - nMix, now); osc.type = type; osc.frequency.setValueAtTime(sF, now);
+                osc = ctx.createOscillator(); const tG = ctx.createGain(); 
+                let tFactor = 0.1; if (type === 'sine') tFactor = 0.65; else if (type === 'triangle') tFactor = 0.35;
+                tG.gain.setValueAtTime((1 - nMix) * tFactor, now); osc.type = type; osc.frequency.setValueAtTime(sF, now);
                 if (ramp === 'linear') osc.frequency.linearRampToValueAtTime(eF, now + dur);
                 else if (ramp === 'exponential') osc.frequency.exponentialRampToValueAtTime(Math.max(1, eF), now + dur);
                 else if (ramp === 'jump') osc.frequency.setValueAtTime(eF, now + (dur * 0.25));
@@ -78,7 +151,11 @@
             let ecC = ec > 0 ? `const d = ctx.createDelay(), f = ctx.createGain(); d.delayTime.setValueAtTime(0.12, now); f.gain.setValueAtTime(${ec}, now); d.connect(f); f.connect(d); f.connect(mG);` : '';
             let conn = ec > 0 ? `connect(mG); n.connect(d);` : `connect(mG);`;
             let connO = ec > 0 ? `connect(mG); osc.connect(tG); tG.connect(d);` : `connect(mG);`;
-            document.getElementById('cText').textContent = `function play_${sn}_Sound() {\n    const ctx = new AudioContext(), now = ctx.currentTime, mG = ctx.createGain(); mG.connect(ctx.destination); mG.gain.setValueAtTime(0.2, now); mG.gain.exponentialRampToValueAtTime(0.001, now + ${du} + ${ec>0?1.0:0});\n    ${ecC}\n    if (${nM} > 0) { const sz = ctx.sampleRate * ${du}, buf = ctx.createBuffer(1, sz, ctx.sampleRate), dData = buf.getChannelData(0); for (let i = 0; i < sz; i++) dData[i] = Math.random() * 2 - 1; const n = ctx.createBufferSource(); n.buffer = buf; const nG = ctx.createGain(); nG.gain.setValueAtTime(${nM}, now); n.connect(nG); nG.${conn} n.start(now); n.stop(now + ${du}); }\n    if (${1-nM} > 0) { const osc = ctx.createOscillator(), tG = ctx.createGain(); tG.gain.setValueAtTime(${1-nM}, now); osc.type = '${ty}'; ${pC} osc.connect(tG); tG.${connO} osc.start(now); osc.stop(now + ${du}); }\n}`;
+            document.getElementById('cText').textContent = `function play_${sn}_Sound() {
+    const ctx = new AudioContext(), now = ctx.currentTime, mG = ctx.createGain(); mG.connect(ctx.destination);
+    mG.gain.setValueAtTime(0.28, now); mG.gain.exponentialRampToValueAtTime(0.001, now + ${du} + ${ec!=='0'?1.0:0});
+    ${ecC}
+    if (${nM} > 0) { const sz = ctx.sampleRate * ${du}, buf = ctx.createBuffer(1, sz, ctx.sampleRate), dData = buf.getChannelData(0); for (let i = 0; i < sz; i++) dData[i] = Math.random() * 2 - 1; const n = ctx.createBufferSource(); n.buffer = buf; const nG = ctx.createGain(); nG.gain.setValueAtTime(${nM * 1.5}, now); n.connect(nG); nG.${conn} n.start(now); n.stop(now + ${du}); }\n    if (${1-nM} > 0) { const osc = ctx.createOscillator(), tG = ctx.createGain(); let tf = 0.1; if('${ty}'==='sine') tf=0.65; else if('${ty}'==='triangle') tf=0.35; tG.gain.setValueAtTime(${1-nM} * tf, now); osc.type = '${ty}'; ${pC} osc.connect(tG); tG.${connO} osc.start(now); osc.stop(now + ${du}); }\n}`;
         }
         function dlWav() {
             const ec = getV('echo'), nM = getV('nMix'), ty = getV('type'), sF = getV('sF'), eF = getV('eF'), du = getV('dur'), ra = getV('ramp'), rate = 44100, totalD = du + (ec > 0 ? 1.0 : 0), frames = rate * totalD, octx = new OfflineAudioContext(1, frames, rate);
@@ -92,18 +169,23 @@
             });
         }
         const presets = {
-            explosion: { noiseMix: 0.8, type: 'sawtooth', startFreq: 200, endFreq: 40, duration: 0.5, ramp: 'linear' }, sandstorm: { noiseMix: 1, type: 'sine', startFreq: 440, endFreq: 440, duration: 1.5, ramp: 'linear' },
-            laser: { noiseMix: 0.2, type: 'sawtooth', startFreq: 1600, endFreq: 100, duration: 0.25, ramp: 'linear' }, coin: { noiseMix: 0, type: 'square', startFreq: 587, endFreq: 880, duration: 0.3, ramp: 'jump' },
-            jump: { noiseMix: 0, type: 'sine', startFreq: 150, endFreq: 600, duration: 0.4, ramp: 'exponential' }, hit: { noiseMix: 0.5, type: 'triangle', startFreq: 120, endFreq: 40, duration: 0.12, ramp: 'linear' }
+            explosion: { noiseMix: 0.8, type: 'sawtooth', startFreq: 200, endFreq: 40, duration: 0.5, ramp: 'linear', echo: 0 }, 
+            sandstorm: { noiseMix: 1, type: 'sine', startFreq: 440, endFreq: 440, duration: 1.5, ramp: 'linear', echo: 0 },
+            laser: { noiseMix: 0.2, type: 'sawtooth', startFreq: 1600, endFreq: 100, duration: 0.25, ramp: 'linear', echo: 0.4 }, 
+            coin: { noiseMix: 0, type: 'square', startFreq: 587, endFreq: 880, duration: 0.3, ramp: 'jump', echo: 0.4 },
+            jump: { noiseMix: 0, type: 'sine', startFreq: 150, endFreq: 600, duration: 0.35, ramp: 'exponential', echo: 0.6 }, 
+            hit: { noiseMix: 0.5, type: 'triangle', startFreq: 120, endFreq: 40, duration: 0.12, ramp: 'linear', echo: 0 }
         };
-        function loadP(n) { pName = n; const p = presets[n]; document.getElementById('echo').value = (n==='coin'||n==='laser') ? 0.4 : 0; applyP(p); }
-        function applyP(p) { document.getElementById('nMix').value = p.noiseMix; document.getElementById('type').value = p.type; document.getElementById('sF').value = p.startFreq; document.getElementById('eF').value = p.endFreq; document.getElementById('dur').value = p.duration; document.getElementById('ramp').value = p.ramp; up(); play(); }
+        function loadP(n) { pName = n; const p = presets[n]; document.getElementById('echo').value = p.echo; document.getElementById('type').value = p.type; document.getElementById('ramp').value = p.ramp; drawWaveIcon(); drawRampIcon(); applyP(p); }
+        function applyP(p) { document.getElementById('nMix').value = p.noiseMix; document.getElementById('sF').value = p.startFreq; document.getElementById('eF').value = p.endFreq; document.getElementById('dur').value = p.duration; up(); play(); }
         function getF() { const f = localStorage.getItem('js_sm_f2'); return f ? JSON.parse(f) : {}; }
         function saveF() { const inp = document.getElementById('fIn'), n = inp.value.trim(); if (!n) return; const f = getF(); f[n] = { echo: getV('echo'), noiseMix: getV('nMix'), type: getV('type'), startFreq: getV('sF'), endFreq: getV('eF'), duration: getV('dur'), ramp: getV('ramp') }; localStorage.setItem('js_sm_f2', JSON.stringify(f)); inp.value = ''; pName = n; rFavs(); genC(); }
         function delF(n) { const f = getF(); delete f[n]; localStorage.setItem('js_sm_f2', JSON.stringify(f)); rFavs(); }
-        function loadF(n) { const f = getF(); if (f[n]) { pName = n; document.getElementById('echo').value = f[n].echo || 0; applyP(f[n]); } }
+        function loadF(n) { const f = getF(); if (f[n]) { pName = n; document.getElementById('echo').value = f[n].echo || 0; document.getElementById('type').value = f[n].type; document.getElementById('ramp').value = f[n].ramp; drawWaveIcon(); drawRampIcon(); applyP(f[n]); } }
         function rFavs() { const f = getF(), list = document.getElementById('fList'); list.innerHTML = ''; const keys = Object.keys(f); if (keys.length === 0) { list.innerHTML = '<div style="color:#777;text-align:center;">なし</div>'; return; } keys.forEach(n => { const div = document.createElement('div'); div.style = 'display:flex; justify-content:space-between; margin-bottom:3px;'; div.innerHTML = `<span style="cursor:pointer;color:#a9ffb4;" onclick="loadF('${n}')">⭐ ${n}</span><button style="background:#e53935;color:#fff;padding:2px 5px;font-size:0.7rem;" onclick="delF('${n}')">消去</button>`; list.appendChild(div); }); }
-        rFavs(); up();
+        
+        // 🔴 初回起動時に波形図と変化図の両方を描画
+        rFavs(); drawWaveIcon(); drawRampIcon(); up();
     </script>
 </body>
 </html>
