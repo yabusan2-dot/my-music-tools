@@ -1,64 +1,72 @@
-// タイムストレッチ重ね合わせ ＆ 直列結合を統合したコア音声処理（テンポ崩れ・間隔空き完全解消版）
+// タイムストレッチ重ね合わせ ＆ 直列結合を統合したコア音声処理（完全バイパス・直列連結版）
 async function processAudio(bufferA, bufferB, isMix, isABase, effects) {
   const durA = bufferA.duration;
   const durB = bufferB.duration;
-  
+  const sampleRate = bufferA.sampleRate; // 通常は同じサンプリングレートを想定
+  const numChannels = bufferA.numberOfChannels;
+
+  // ==========================================
+  // 【新設】B. 結合（直列つなぎ）モードの処理
+  // ==========================================
+  if (!isMix) {
+    // 2つのトラックの長さをジャストで合算（余白や無音は1ミリ秒も入りません）
+    const totalLength = Math.floor((durA + durB) * sampleRate);
+    
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const joinedBuffer = ctx.createBuffer(numChannels, totalLength, sampleRate);
+
+    // チャンネルごとに、エフェクトを通さない純粋なPCMデータをダイレクトに直列コピーする
+    for (let channel = 0; channel < numChannels; channel++) {
+      const dataA = bufferA.getChannelData(channel);
+      const dataB = bufferB.getChannelData(channel);
+      const joinedData = joinedBuffer.getChannelData(channel);
+
+      if (isABase) {
+        // トラックA ➔ トラックB の順で結合
+        joinedData.set(dataA, 0);       // 0秒からAをコピー
+        joinedData.set(dataB, dataA.length); // Aが終わったジャストの位置からBをコピー
+      } else {
+        // トラックB ➔ トラックA の順で結合
+        joinedData.set(dataB, 0);       // 0秒からBをコピー
+        joinedData.set(dataA, dataB.length); // Bが終わったジャストの位置からAをコピー
+      }
+    }
+    // エフェクトの濁りも、音漏れも、後ろの無音も発生しない、完璧な3.5秒のバッファを返す
+    return joinedBuffer;
+  }
+
+  // ==========================================
+  // A. 重ね合わせ（ミックス）モードの処理（従来通り）
+  // ==========================================
   let targetDuration;
   let ratioA = 1.0;
   let ratioB = 1.0;
-  let startA = 0;
-  let startB = 0;
 
-  if (isMix) {
-    // 【重ね合わせモード】の音楽的な長さ
-    if (isABase) {
-      targetDuration = durA;       
-      ratioB = durB / durA;        
-    } else {
-      targetDuration = durB;       
-      ratioA = durA / durB;        
-    }
+  if (isABase) {
+    targetDuration = durA;       
+    ratioB = durB / durA;        
   } else {
-    // 【結合モード】の音楽的な長さ（AとBの合算秒数）
-    targetDuration = durA + durB; 
-    ratioA = 1.0;                 
-    ratioB = 1.0;                 
-    
-    if (isABase) {
-      startA = 0;                 
-      startB = durA;              
-    } else {
-      startA = durB;              
-      startB = 0;                 
-    }
+    targetDuration = durB;       
+    ratioA = durA / durB;        
   }
 
-  // 【重要】無限ループで余韻を回り込ませるために、裏側では少し長め（+2.5秒）に計算する
   const tailDuration = 2.5; 
   const totalRenderDuration = targetDuration + tailDuration;
 
-  // 1. 裏側（OfflineContext）でレンダリング
   const longBuffer = await Tone.Offline(async (context) => {
-    let playerA, playerB;
+    const playerA = new Tone.GrainPlayer(bufferA);
+    const playerB = new Tone.GrainPlayer(bufferB);
 
-    if (isMix) {
-      playerA = new Tone.GrainPlayer(bufferA);
-      playerB = new Tone.GrainPlayer(bufferB);
-      playerA.grainSize = 0.1; 
-      playerA.overlap = 0.05;
-      playerB.grainSize = 0.1; 
-      playerB.overlap = 0.05;
-      playerA.playbackRate = ratioA;
-      playerB.playbackRate = ratioB;
-    } else {
-      playerA = new Tone.Player(bufferA);
-      playerB = new Tone.Player(bufferB);
-    }
+    playerA.playbackRate = ratioA;
+    playerB.playbackRate = ratioB;
+    playerA.grainSize = 0.1; 
+    playerA.overlap = 0.05;
+    playerB.grainSize = 0.1; 
+    playerB.overlap = 0.05;
 
     playerA.volume.value = effects.volA;
     playerB.volume.value = effects.volB;
 
-    // トラックAのエフェクトチェーン
     const distNodeA = new Tone.Distortion(effects.distA).toDestination();
     const delayNodeA = new Tone.FeedbackDelay("4n", effects.echoA).connect(distNodeA);
     const hpNodeA = new Tone.Filter(effects.hpA * 2000, "highpass").connect(delayNodeA);
@@ -66,7 +74,6 @@ async function processAudio(bufferA, bufferB, isMix, isABase, effects) {
     const lpNodeA = new Tone.Filter(lpFreqA, "lowpass").connect(hpNodeA);
     playerA.connect(lpNodeA); 
 
-    // トラックBのエフェクトチェーン
     const distNodeB = new Tone.Distortion(effects.distB).toDestination();
     const delayNodeB = new Tone.FeedbackDelay("4n", effects.echoB).connect(distNodeB);
     const hpNodeB = new Tone.Filter(effects.hpB * 2000, "highpass").connect(delayNodeB);
@@ -74,35 +81,26 @@ async function processAudio(bufferA, bufferB, isMix, isABase, effects) {
     const lpNodeB = new Tone.Filter(lpFreqB, "lowpass").connect(hpNodeB);
     playerB.connect(lpNodeB); 
 
-    playerA.start(startA);
-    playerB.start(startB);
+    playerA.start(0);
+    playerB.start(0);
   }, totalRenderDuration);
 
-  // 2. 【核心】書き出すファイルの大きさは、余白なしの「音楽的なジャストサイズ」にする
-  const sampleRate = longBuffer.sampleRate;
-  const numChannels = longBuffer.numberOfChannels;
-  const finalLength = Math.floor(targetDuration * sampleRate); // ミリ秒の隙間も許さない厳密な長さ
-  
+  const finalLength = Math.floor(targetDuration * sampleRate); 
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const finalBuffer = ctx.createBuffer(numChannels, finalLength, sampleRate);
 
-  // 3. 波形データのコピーと、重ね合わせ時のみの回り込み処理
   for (let channel = 0; channel < numChannels; channel++) {
     const longData = longBuffer.getChannelData(channel);
     const finalData = finalBuffer.getChannelData(channel);
 
-    // ジャストサイズ分だけをキッチリコピー（結合モードならこれで完璧に隙間なく終わる）
     for (let i = 0; i < finalLength; i++) {
       finalData[i] = longData[i];
     }
 
-    // 重ね合わせ（Mix）モードの時だけ、はみ出たエコーの余韻（テイル）を頭に回り込ませる
-    if (isMix) {
-      const tailLength = longData.length - finalLength;
-      for (let i = 0; i < tailLength; i++) {
-        if (i < finalLength) {
-          finalData[i] += longData[finalLength + i];
-        }
+    const tailLength = longData.length - finalLength;
+    for (let i = 0; i < tailLength; i++) {
+      if (i < finalLength) {
+        finalData[i] += longData[finalLength + i];
       }
     }
   }

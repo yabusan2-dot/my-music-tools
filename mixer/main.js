@@ -6,12 +6,11 @@ let loadedPhraseBuffer = null;
 
 const audioCtx = new AudioContext();
 
-// --- トラックA ファイル選択時の処理【修正！】 ---
+// --- トラックA ファイル選択時の処理 ---
 document.getElementById('rhythmFile').addEventListener('change', async (e) => {
   if (!e.target.files.length) return;
   document.getElementById('rhythmTime').innerText = "解析中...";
   try {
-    // e.target.files[0] として1番目のファイルを正しく指定
     const arrayBuffer = await readFileAsArrayBuffer(e.target.files[0]);
     loadedRhythmBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     updateTimelineBars();
@@ -22,12 +21,11 @@ document.getElementById('rhythmFile').addEventListener('change', async (e) => {
   }
 });
 
-// --- トラックB ファイル選択時の処理【修正！】 ---
+// --- トラックB ファイル選択時の処理 ---
 document.getElementById('phraseFile').addEventListener('change', async (e) => {
   if (!e.target.files.length) return;
   document.getElementById('phraseTime').innerText = "解析中...";
   try {
-    // e.target.files[0] として1番目のファイルを正しく指定
     const arrayBuffer = await readFileAsArrayBuffer(e.target.files[0]);
     loadedPhraseBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     updateTimelineBars();
@@ -52,7 +50,7 @@ document.getElementsByName('processMode').forEach(radio => {
     
     updateRadioLabels();
     updateTimelineBars();
-    resetMixStatus();
+    resetMixStatus(); // 【重要】ここでエフェクトスライダーのロック状態も自動更新されます
   });
 });
 
@@ -79,8 +77,11 @@ function updateRadioLabels() {
   }
 }
 
-// --- エフェクトと音量のスライダーを動かしたときもリセットする ---
+// 全てのスライダーのIDリスト
 const effectInputs = ['volA', 'distA', 'echoA', 'lpA', 'hpA', 'volB', 'distB', 'echoB', 'lpB', 'hpB'];
+// 音量以外の純粋なエフェクトスライダーのIDリスト
+const pureEffectInputs = ['distA', 'echoA', 'lpA', 'hpA', 'distB', 'echoB', 'lpB', 'hpB'];
+
 effectInputs.forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
     resetMixStatus();
@@ -101,8 +102,14 @@ function resetMixStatus() {
     previewPlayer.dispose();
     previewPlayer = null;
     document.getElementById('playBtn').innerText = "④ BGMを試聴する";
-    toggleUiLock(false);
   }
+  
+  // 【新設】現在のモードに合わせて、エフェクトスライダーの有効/無効を切り替える
+  const isMix = document.getElementById('modeMix').checked;
+  pureEffectInputs.forEach(id => {
+    // 結合モードの時は、音量以外のエフェクトスライダーを操作不能にする
+    document.getElementById(id).disabled = !isMix;
+  });
 }
 
 // --- タイムラインバーの伸縮・結合の視覚化ロジック ---
@@ -228,9 +235,16 @@ function toggleUiLock(isLock) {
   document.getElementById('rhythmFile').disabled = isLock;
   document.getElementById('phraseFile').disabled = isLock;
   document.getElementById('mixBtn').disabled = isLock;
-  effectInputs.forEach(id => {
-    document.getElementById(id).disabled = isLock;
-  });
+  
+  if (isLock) {
+    // 再生中は音量も含めてすべてロック
+    effectInputs.forEach(id => {
+      document.getElementById(id).disabled = true;
+    });
+  } else {
+    // 再生停止時は、現在のモード（MixかJoinか）に合わせてリセット関数側で正しくロック制御する
+    resetMixStatus();
+  }
 }
 
 // --- ファイル非同期読み込み補助関数 ---
