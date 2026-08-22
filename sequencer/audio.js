@@ -55,7 +55,6 @@ function refreshAccUI() {
     }
 }
 
-// 🔴 核心：アタック、ディケイ、つや(倍音)を動的にエンベロープ合成して楽器にする新エンジン
 function playNote(ctx, f, type, echo, vol, time, dur, trackNum) {
     if (f === 0 || isNaN(f)) return;
     const atk = getV('atk' + trackNum), dec = getV('dec' + trackNum);
@@ -69,7 +68,6 @@ function playNote(ctx, f, type, echo, vol, time, dur, trackNum) {
     if (f<200&&(type==='sine'||type==='triangle')) fac*=2.2;
     const maxVolume = fac * (vol / 100);
 
-    // 🎹 【アタック・ディケイのエンベロープ計算保護ガード】
     const envelopeDuration = Math.max(0.001, Math.min(dur, atk + dec));
 
     baseGain.gain.setValueAtTime(0, time);
@@ -86,14 +84,21 @@ function playNote(ctx, f, type, echo, vol, time, dur, trackNum) {
         d.connect(fG); fG.connect(d); fG.connect(mG); out = d; 
     }
 
-    // 基音オシレーター
     const osc = ctx.createOscillator();
     osc.type = type; osc.frequency.setValueAtTime(f, time); 
     osc.connect(baseGain); baseGain.connect(mG); baseGain.connect(out); 
     osc.start(time); osc.stop(time + dur);
-    activeOscillators.push(osc); // 💡 消音用に追跡
+    activeOscillators.push(osc); 
 
-    // 🎹 倍音ブレンド回路
+    // 🔴 修正：オシレーターの終了イベントを物理的にしっかり記述！鳴り終わったら即座に物理切断
+    osc.onended = () => {
+        try {
+            osc.disconnect();
+            baseGain.disconnect();
+            if (echo > 0) out.disconnect();
+        } catch(e){}
+    };
+
     if (harm > 0) {
         const harmOsc = ctx.createOscillator(), harmGain = ctx.createGain();
         harmGain.gain.setValueAtTime(0, time);
@@ -102,7 +107,16 @@ function playNote(ctx, f, type, echo, vol, time, dur, trackNum) {
         harmOsc.type = 'sine'; harmOsc.frequency.setValueAtTime(f * 2, time);
         harmOsc.connect(harmGain); harmGain.connect(mG); harmGain.connect(out);
         harmOsc.start(time); harmOsc.stop(time + dur);
-        activeOscillators.push(harmOsc); // 💡 消音用に追跡
+        activeOscillators.push(harmOsc);
+        
+        // 🔴 修正：倍音オシレーター側も終了時にメインゲインごとガサッと完全成仏切断
+        harmOsc.onended = () => {
+            try {
+                harmOsc.disconnect();
+                harmGain.disconnect();
+                mG.disconnect();
+            } catch(e){}
+        };
     }
 }
 function playTracks(ctx, vol, currentStepDuration) {
@@ -152,8 +166,7 @@ function togglePlay() {
         clearInterval(timerId); isPlaying = false; 
         document.getElementById('pBtn').textContent = '▶ BGMを再生する'; 
         document.querySelectorAll('.note-box').forEach(b => b.classList.remove('active')); 
-        // 💡 解決の鍵：停止ボタンが押された瞬間、全オシレーターを強制消音（残響ハミ出しも全カット）
-        activeOscillators.forEach(osc => { try { osc.stop(); } catch(e){} });
+        activeOscillators.forEach(osc => { try { osc.stop(); osc.disconnect(); } catch(e){} }); 
         activeOscillators = [];
     } else { 
         if (actx.state==='suspended') actx.resume(); isPlaying = true; stepIndex = 0; 
@@ -161,7 +174,6 @@ function togglePlay() {
     } 
 }
 
-// 🔴 改善：楽器エディット（アタック・ディケイ・つや）も5連スロットに含めてJSONセーブ
 function saveData() {
     readAllDataFromUI();
     const slot = document.getElementById('saveSlot').value;
@@ -177,7 +189,6 @@ function saveData() {
     alert('📥 スロット ' + slot + ' に楽譜とシンセ設定を完全に記憶しました！');
 }
 
-// 🔴 改善：記憶されていた楽器つまみの位置まで100%完全再現して復元するロード回路
 function loadData() {
     const slot = document.getElementById('saveSlot').value;
     const raw = localStorage.getItem('js_bgm_slot_' + slot);
@@ -188,7 +199,6 @@ function loadData() {
     acc1 = d.a1 ? d.a1 : new Array(32).fill(0); acc2 = d.a2 ? d.a2 : new Array(32).fill(0);
     document.getElementById('type1').value = d.t1; document.getElementById('type2').value = d.t2;
     document.getElementById('vol').value = d.vol; document.getElementById('tempo').value = d.tempo; document.getElementById('echo').value = d.echo;
-    // シンセつまみ位置をUIに復元
     if(d.atk1) {
         document.getElementById('atk1').value = d.atk1; document.getElementById('dec1').value = d.dec1; document.getElementById('harm1').value = d.harm1;
         document.getElementById('atk2').value = d.atk2; document.getElementById('dec2').value = d.dec2; document.getElementById('harm2').value = d.harm2;
@@ -216,7 +226,7 @@ function genC() {
     const vl = getV('vol'), tm = getV('tempo'), ec = getV('echo'), ty1 = getV('type1'), ty2 = getV('type2');
     const atk1 = getV('atk1'), dec1 = getV('dec1'), harm1 = getV('harm1')/100, atk2 = getV('atk2'), dec2 = getV('dec2'), harm2 = getV('harm2')/100;
     let ecC = ec > 0 ? `const d=ctx.createDelay(), f=ctx.createGain(); d.delayTime.setValueAtTime(0.15,now); f.gain.setValueAtTime(${ec},now); d.connect(f); f.connect(d); mG.connect(d?d:mG);` : '';
-    document.getElementById('cText').textContent = `function startPolyBGM() {\n    const ctx = new AudioContext(), m1 = [${activeMel1.join(',')}], m2 = [${activeMel2.join(',')}], a1 = [${sA1.join(',')}], a2 = [${sA2.join(',')}];\n    let idx = 0, step = ${60/tm/2};\n    setInterval(() => {\n        const now = ctx.currentTime; const play = (m, acc, ty, atk, dec, harm) => {\n            let f = m[idx]; if (f <= 0) return; let tied = 0; for (let j = idx+1; j < m.length; j++) { if (m[j] === -1) tied++; else break; }\n            const dur = step * (1 + tied) * 0.9; if (acc[idx] === 1) f *= 1.059463; else if (acc[idx] === -1) f /= 1.059463;\n            const osc = ctx.createOscillator(), bG = ctx.createGain(), mG = ctx.createGain(); mG.connect(ctx.destination);\n            let fac = 0.05; if (ty==='sine') fac=0.20; else if (ty==='triangle') fac=0.15; if (f<200&&(ty==='sine'||ty==='triangle')) fac*=2.2;\n            const maxV = fac * (${vl/100}), envD = Math.max(0.001, Math.min(dur, atk + dec));\n            bG.gain.setValueAtTime(0, now); bG.gain.linearRampToValueAtTime(maxV, now + atk); bG.gain.exponentialRampToValueAtTime(0.001, now + envD);\n            mG.gain.setValueAtTime(1.0, now); mG.gain.exponentialRampToValueAtTime(0.001, now + dur + ${ec>0?(ec*2.5).toFixed(1):0});\n            let out = mG; ${ecC} osc.type = ty; osc.frequency.setValueAtTime(f, now); osc.connect(bG); bG.connect(mG); bG.connect(out); osc.start(now); osc.stop(now + dur);\n            if (harm > 0) { const hOsc = ctx.createOscillator(), hG = ctx.createGain(); hG.gain.setValueAtTime(0, now); hG.gain.linearRampToValueAtTime(maxV * harm, now + atk); hG.gain.exponentialRampToValueAtTime(0.001, now + envD); hOsc.type = 'sine'; hOsc.frequency.setValueAtTime(f * 2, now); hOsc.connect(hG); hG.connect(mG); hG.connect(out); hOsc.start(now); hOsc.stop(now + dur); }\n        };\n        play(m1, a1, '${ty1}', ${atk1}, ${dec1}, ${harm1}); play(m2, a2, '${ty2}', ${atk2}, ${dec2}, ${harm2}); idx = (idx + 1) % m1.length;\n    }, step * 1000);\n}`;
+    document.getElementById('cText').textContent = `function startPolyBGM() {\n    const ctx = new AudioContext(), m1 = [${activeMel1.join(',')}], m2 = [${activeMel2.join(',')}], a1 = [${sA1.join(',')}], a2 = [${sA2.join(',')}];\n    let idx = 0, step = ${60/tm/2};\n    setInterval(() => {\n        const now = ctx.currentTime; const play = (m, acc, ty, atk, dec, harm) => {\n            let f = m[idx]; if (f <= 0) return; let tied = 0; for (let j = idx+1; j < m.length; j++) { if (m[j] === -1) tied++; else break; }\n            const dur = step * (1 + tied) * 0.9; if (acc[idx] === 1) f *= 1.059463; else if (acc[idx] === -1) f /= 1.059463;\n            const osc = ctx.createOscillator(), bG = ctx.createGain(), mG = ctx.createGain(); mG.connect(ctx.destination);\n            let fac = 0.05; if (ty==='sine') fac=0.20; else if (ty==='triangle') fac=0.15; if (f<200&&(ty==='sine'||ty==='triangle')) fac*=2.2;\n            const maxV = fac * (${vl/100}), envD = Math.max(0.001, Math.min(dur, atk + dec));\n            bG.gain.setValueAtTime(0, now); bG.gain.linearRampToValueAtTime(maxV, now + atk); bG.gain.exponentialRampToValueAtTime(0.001, now + envD);\n            mG.gain.setValueAtTime(1.0, now); mG.gain.exponentialRampToValueAtTime(0.001, now + dur + ${ec>0?(ec*2.5).toFixed(1):0});\n            let out = mG; ${ecC} osc.type = ty; osc.frequency.setValueAtTime(f, now); osc.connect(bG); bG.connect(mG); osc.connect(out); osc.start(now); osc.stop(now + dur); osc.onended=()=>{try{osc.disconnect();bG.disconnect();if(ec>0)out.disconnect();}catch(e){}};\n            if (harm > 0) { const hOsc = ctx.createOscillator(), hG = ctx.createGain(); hG.gain.setValueAtTime(0, now); hG.gain.linearRampToValueAtTime(maxV * harm, now + atk); hG.gain.exponentialRampToValueAtTime(0.001, now + envD); hOsc.type = 'sine'; hOsc.frequency.setValueAtTime(f * 2, now); hOsc.connect(hG); hG.connect(mG); hOsc.connect(out); hOsc.start(now); hOsc.stop(now + dur); hOsc.onended=()=>{try{hOsc.disconnect();hG.disconnect();mG.disconnect();}catch(e){}} }\n        };\n        play(m1, a1, '${ty1}', ${atk1}, ${dec1}, ${harm1}); play(m2, a2, '${ty2}', ${atk2}, ${dec2}, ${harm2}); idx = (idx + 1) % m1.length;\n    }, step * 1000);\n}`;
 }
 
 function dlWav() {
@@ -238,7 +248,6 @@ function dlWav() {
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `duet_${currentMeter}b.wav`; a.click();
     });
 }
-
 function loadM(n) {
     currentPreset = n; 
     document.getElementById('tempo').value = tPresets[n];
