@@ -1,3 +1,18 @@
+let isPlaying = false;
+let timerId = null;
+let stepIndex = 0;
+let currentMeter = 4;
+let currentPhrase = 1;
+let currentPreset = 'hero';
+
+let melody1 = new Array(32).fill(0);
+let melody2 = new Array(32).fill(0);
+let acc1 = new Array(32).fill(0);
+let acc2 = new Array(32).fill(0);
+
+// 🔴 新設：演奏中の楽器の息の根を一瞬で止めるためのオシレーター追跡配列
+let activeOscillators = [];
+
 const scaleTable1 = { 
     "ー":-1,"休":0,"ラ↑":440,"ソ↑":392,"ファ↑":349.23,"ミ↑":329.63,
     "レ↑":293.66,"ド↑":261.63,"シ":246.94,"ラ":220,"ソ":196,

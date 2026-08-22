@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8"><title>JS 2声作曲メーカー(楽器エディット版)</title>
+    <meta charset="UTF-8"><title>JS 2声作曲メーカー (楽器エディット版)</title>
     <style>
-        body { font-family: sans-serif; background: #1e1e24; color: #fff; padding: 15px; max-width: 540px; margin: 0 auto; }
+        body { font-family: sans-serif; background: #1e1e24; color: #fff; padding: 15px; max-width: 740px; margin: 0 auto; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 12px; }
         button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.8rem; }
         button.preset { background: #444; color: #ccc; }
@@ -12,28 +12,34 @@
         pre { background: #111; padding: 10px; max-height: 100px; overflow: auto; color: #a9ffb4; font-size: 0.7rem; }
         .track-section { background: #2a2a35; padding: 8px; border-radius: 6px; margin-bottom: 15px; border-top: 4px solid #00bcd4; }
         .t2-border { border-top-color: #ff9800; }
-        
-        .seq-title { font-size: 0.82rem; font-weight: bold; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .seq-title { font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .seq-container { display: grid; gap: 4px; background: #1e1e24; padding: 5px; border-radius: 4px; }
-        .note-box { display: flex; flex-direction: column; align-items: center; background: #2a2a35; padding: 3px 2px; border-radius: 4px; border: 1px solid #444; }
+        
+        .note-box { display: flex; flex-direction: column; align-items: center; background: #2a2a35; padding: 5px 3px; border-radius: 4px; border: 1px solid #444; }
         .note-box.active { border-color: #fff; background: #555; }
         .note-num { font-size: 0.6rem; color: #aaa; margin-bottom: 2px; }
-        .acc-group { display: flex; width: 100%; gap: 2px; align-items: center; margin-top: 2px; }
-        .acc-btn { flex: 1; padding: 2px 0; font-size: 0.65rem; background: #444; color: #bbb; border-radius: 2px; text-align: center; cursor: pointer; border:none; }
+        .acc-group { display: flex; flex-direction: row; width: 100%; gap: 2px; align-items: center; margin-top: 2px; }
+        .acc-btn { width: 20px; padding: 3px 0; font-size: 0.65rem; background: #444; color: #bbb; border-radius: 2px; text-align: center; cursor: pointer; border: none; }
+        .note-box select { flex: 1; min-width: 0; font-size: 0.65rem; padding: 2px 0; background: #111; text-align: center; border: none; }
+        .t1-sel { color: #00bcd4; } .t2-sel { color: #ff9800; }
         .acc-btn.flat-on { background: #00bcd4 !important; color: #1e1e24 !important; font-weight: bold; }
         .acc-btn.sharp-on { background: #ff9800 !important; color: #1e1e24 !important; font-weight: bold; }
-        .note-box select { font-size: 0.65rem; padding: 1px 0; background: #111; text-align: center; border: none; width: 100%; }
-        .t1-sel { color: #00bcd4; } .t2-sel { color: #ff9800; }
+
         .mode-container { display: flex; gap: 5px; margin-bottom: 8px; background: #2a2a35; padding: 4px; border-radius: 4px; }
         .mode-btn { flex: 1; background: #3a3a4a; color: #aaa; padding: 6px; font-size: 0.78rem; border:none; border-radius:4px; cursor:pointer; }
         .mode-btn.active { background: #ff9800; color: #1e1e24; font-weight:bold; }
         .phrase-btn.active { background: #4caf50; color: #fff; }
-        .wave-ui-group { display: flex; gap: 6px; align-items: center; }
-        .wave-preview-box { width: 44px; height: 24px; background: #111; border: 1px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+        .wave-ui-group { display: flex; gap: 8px; align-items: center; flex: 1; justify-content: flex-end; }
+        .wave-preview-box { width: 50px; height: 26px; background: #111; border: 1px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
         .wave-svg1 { stroke: #00bcd4; stroke-width: 2; fill: none; }
         .wave-svg2 { stroke: #ff9800; stroke-width: 2; fill: none; }
+        .save-box { background: #2d2d38; padding: 8px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #444; }
+        .save-input-group { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+        .save-btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .btn-save { background: #e91e63 !important; color: #fff !important; }
+        .btn-load { background: #f4b400 !important; color: #1e1e24 !important; }
 
-        /* 🔴 新設：音色エディター（シンセ部）のスタイル */
+        /* 🔴 新設：どうぶつの森風の可愛い音色がデザインできるシンセサイザーパネル */
         .synth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; background: #222; padding: 8px; border-radius: 6px; }
         .synth-panel { background: #2d2d38; padding: 6px; border-radius: 4px; font-size: 0.75rem; }
         .synth-row { margin-top: 4px; display: flex; flex-direction: column; }
@@ -59,38 +65,52 @@
         <button id="p-3" class="mode-btn phrase-btn" onclick="changePhrase(3)">3フレーズ</button>
         <button id="p-4" class="mode-btn phrase-btn" onclick="changePhrase(4)">4フレーズ</button>
     </div>
+    <div class="save-box">
+        <div class="save-input-group">
+            <span style="font-size:0.75rem; font-weight:bold; white-space:nowrap; color:#00bcd4;">🗄️ 保存先リスト:</span>
+            <select id="saveSlot" style="flex:1; padding:4px; font-size:0.8rem;">
+                <option value="1">🎵 アレンジ・スロット 1</option>
+                <option value="2">🎵 アレンジ・スロット 2</option>
+                <option value="3">🎵 アレンジ・スロット 3</option>
+                <option value="4">🎵 アレンジ・スロット 4</option>
+                <option value="5">🎵 アレンジ・スロット 5</option>
+            </select>
+        </div>
+        <div class="save-btn-group">
+            <button class="btn-save" onclick="saveData()">📥 選択スロットに記憶する</button>
+            <button class="btn-load" onclick="loadData()">📤 選択スロットから読み込む</button>
+        </div>
+    </div>
 
-    <!-- 🔴 新設：どうぶつの森風の音色が作れるW音色シンセサイザーパネル -->
+    <!-- 🔴 新設：W音色シンセサイザー操作スライダー領域 -->
     <div class="synth-grid">
-        <!-- メロディ側楽器設計 -->
         <div class="synth-panel" style="border-left: 3px solid #00bcd4;">
             <div style="font-weight:bold; color:#00bcd4;">🎛️ メロディの楽器エディット</div>
-            <div class="synth-row"><label>アタック (音の立ち上がり): <span id="v-atk1">0.01</span>秒</label><input type="range" id="atk1" min="0" max="0.3" step="0.01" value="0.01" oninput="up()"></div>
-            <div class="synth-row"><label>ディケイ (音のハネ・余韻): <span id="v-dec1">0.15</span>秒</label><input type="range" id="dec1" min="0.02" max="0.5" step="0.01" value="0.15" oninput="up()"></div>
+            <div class="synth-row"><label>アタック (立ち上がり): <span id="v-atk1">0.01</span>秒</label><input type="range" id="atk1" min="0" max="0.3" step="0.01" value="0.01" oninput="up()"></div>
+            <div class="synth-row"><label>ディケイ (キレ・余韻): <span id="v-dec1">0.15</span>秒</label><input type="range" id="dec1" min="0.02" max="0.5" step="0.01" value="0.15" oninput="up()"></div>
             <div class="synth-row"><label>つや・太さ (倍音ブレンド): <span id="v-harm1">0</span>%</label><input type="range" id="harm1" min="0" max="100" step="5" value="0" oninput="up()"></div>
         </div>
-        <!-- ベース側楽器設計 -->
         <div class="synth-panel" style="border-left: 3px solid #ff9800;">
             <div style="font-weight:bold; color:#ff9800;">🎛️ ベースの楽器エディット</div>
-            <div class="synth-row"><label>アタック (音の立ち上がり): <span id="v-atk2">0.01</span>秒</label><input type="range" id="atk2" min="0" max="0.3" step="0.01" value="0.01" oninput="up()"></div>
-            <div class="synth-row"><label>ディケイ (音のハネ・余韻): <span id="v-dec2">0.25</span>秒</label><input type="range" id="dec2" min="0.02" max="0.5" step="0.01" value="0.25" oninput="up()"></div>
+            <div class="synth-row"><label>アタック (立ち上がり): <span id="v-atk2">0.01</span>秒</label><input type="range" id="atk2" min="0" max="0.3" step="0.01" value="0.01" oninput="up()"></div>
+            <div class="synth-row"><label>ディケイ (キレ・余韻): <span id="v-dec2">0.25</span>秒</label><input type="range" id="dec2" min="0.02" max="0.5" step="0.01" value="0.25" oninput="up()"></div>
             <div class="synth-row"><label>つや・太さ (倍音ブレンド): <span id="v-harm2">0</span>%</label><input type="range" id="harm2" min="0" max="100" step="5" value="0" oninput="up()"></div>
         </div>
     </div>
 
     <div class="track-section">
-        <div class="seq-title" style="color:#00bcd4;"><span>🎵 メロディ音色（波形）</span>
+        <div class="seq-title" style="color:#00bcd4;"><span>🎵 メロディ音色</span>
             <div class="wave-ui-group">
-                <select id="type1" onchange="drawWaveIcon(1); up();" style="width:150px; padding:2px; font-size:0.7rem;"><option value="sine">sine（滑らか）</option><option value="square" selected>square（ピコピコ）</option><option value="sawtooth">sawtooth（のこぎり歯）</option><option value="triangle">triangle（ファミコン風）</option></select>
+                <select id="type1" onchange="drawWaveIcon(1); up();" style="width:150px; padding:2px; font-size:0.75rem;"><option value="sine">sine（滑らか）</option><option value="square" selected>square（ピコピコ）</option><option value="sawtooth">sawtooth（のこぎり歯）</option><option value="triangle">triangle（ファミコン風）</option></select>
                 <div class="wave-preview-box" id="wavePreview1"></div>
             </div>
         </div>
         <div class="seq-container" id="t1-main-box"></div>
     </div>
     <div class="track-section t2-border">
-        <div class="seq-title" style="color:#ff9800;"><span>🎸 ベース音色（波形）</span>
+        <div class="seq-title" style="color:#ff9800;"><span>🎸 ベース音色</span>
             <div class="wave-ui-group">
-                <select id="type2" onchange="drawWaveIcon(2); up();" style="width:150px; padding:2px; font-size:0.7rem;"><option value="sine">sine（滑らか）</option><option value="square">square（ピコピコ）</option><option value="sawtooth">sawtooth</option><option value="triangle" selected>triangle（ファミコン風）</option></select>
+                <select id="type2" onchange="drawWaveIcon(2); up();" style="width:150px; padding:2px; font-size:0.75rem;"><option value="sine">sine（滑らか）</option><option value="square">square（ピコピコ）</option><option value="sawtooth">sawtooth（のこぎり歯）</option><option value="triangle" selected>triangle（ファミコン風）</option></select>
                 <div class="wave-preview-box" id="wavePreview2"></div>
             </div>
         </div>
@@ -101,11 +121,12 @@
     <div class="row" style="background:#3d2f3d; padding:5px; border-radius:4px; border-left:4px solid #00bcd4;"><label>エコーの強さ (残響): <span id="v-echo">0.6</span></label><input type="range" id="echo" min="0" max="0.95" step="0.05" value="0.6" oninput="up()"></div>
     
     <button style="width:100%; margin-bottom:5px; background:#4caf50; color:#fff;" id="pBtn" onclick="togglePlay()">▶ BGMを再生する</button>
-    <button style="width:100%; background:#008cba; color:#fff;" onclick="dlWav()">📥 無限ループ用WAV保存</button>
+    <button style="width:100%; background:#008cba; color:#fff;" onclick="dlWav()">📥 無限ループWAV保存</button>
     <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;"><span>📋 ゲーム用BGMコード:</span><button style="background:#888; color:#fff; padding:2px 6px; font-size:0.7rem;" onclick="copyC()">コピー</button></div>
     <pre id="cText"></pre>
 
     <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script src="ui.js"></script>
+    <script src="audio.js"></script>
 </body>
 </html>
