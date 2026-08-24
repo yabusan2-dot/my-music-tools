@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Loop Processor</title>
+  <!-- 共通のTone.jsを読み込み -->
+  <script src="Tone.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #0f111a;
+      color: #e2e8f0;
+      padding: 20px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+      background-color: #161925;
+      border: 1px solid #23283d;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.8rem;
+      letter-spacing: 1px;
+      background: linear-gradient(45deg, #a8ff78, #78ffd6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #23283d;
+      padding-bottom: 10px;
+    }
+
+    .file-select-zone {
+      background-color: #1e2235;
+      border: 2px dashed #3a4263;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      cursor: pointer;
+      transition: border-color 0.3s;
+    }
+    .file-select-zone:hover {
+      border-color: #78ffd6;
+    }
+
+    .display-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 650px) {
+      .display-grid { grid-template-columns: 1fr; }
+    }
+
+    .display-panel {
+      background-color: #090a0f;
+      border: 1px solid #23283d;
+      border-radius: 6px;
+      padding: 10px;
+      position: relative;
+    }
+    .display-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 0 5px;
+    }
+    .display-label {
+      font-size: 11px;
+      color: #718096;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    
+    .popout-btn {
+      background: rgba(120, 255, 214, 0.1);
+      border: 1px solid rgba(120, 255, 214, 0.3);
+      color: #78ffd6;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .popout-btn:hover:not(:disabled) {
+      background: rgba(120, 255, 214, 0.25);
+      border-color: #78ffd6;
+    }
+    .popout-btn:disabled {
+      color: #4a5568; border-color: #2d3748; background: transparent; cursor: not-allowed;
+    }
+
+    canvas {
+      width: 100%;
+      height: 160px;
+      display: block;
+      background-color: #050608;
+      border-radius: 4px;
+    }
+
+    .analysis-panel {
+      background: linear-gradient(145deg, #1a1f36, #161927);
+      border: 1px solid #2d385c;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .analysis-results {
+      font-family: monospace;
+      font-size: 13px;
+      color: #a0aec0;
+      display: flex;
+      gap: 20px;
+    }
+    .analysis-results strong {
+      color: #78ffd6;
+      font-size: 15px;
+    }
+    #analyzeBtn {
+      background: #2d385c; color: #78ffd6; border: 1px solid #3d4b7c;
+      padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: all 0.2s;
+    }
+    #analyzeBtn:hover:not(:disabled) { background: #3d4b7c; box-shadow: 0 0 10px rgba(120, 255, 214, 0.2); }
+    #analyzeBtn:disabled { color: #4a5568; border-color: #23283d; background: transparent; cursor: not-allowed; }
+
+    .edit-panel {
+      background-color: #1a1c29;
+      border: 1px solid #343a4e;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .edit-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #ffb300;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #343a4e;
+      padding-bottom: 5px;
+    }
+    .edit-row {
+      margin: 12px 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .edit-row label {
+      font-size: 13px;
+      color: #a0aec0;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    /* 【新設】ミリ秒マイクロ調整ボタン用コンテナ */
+    .micro-adjust-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #090a0f;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #343a4e;
+    }
+    .micro-btn {
+      background: #23273a;
+      color: #ffb300;
+      border: none;
+      font-size: 11px;
+      padding: 2px 6px;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: background 0.1s;
+    }
+    .micro-btn:hover:not(:disabled) { background: #343a4e; color: #fff; }
+    .micro-btn:disabled { color: #4a5568; background: transparent; cursor: not-allowed; }
+
+    .edit-row label span {
+      font-family: monospace; color: #ffb300; font-size: 14px; font-weight: bold;
+    }
+    .edit-row input[type="range"] {
+      width: 100%; cursor: pointer;
+    }
+    
+    .bpm-fix-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 5px;
+    }
+    .bpm-input {
+      width: 80px; padding: 6px; background: #090a0f; color: #ffb300;
+      border: 1px solid #343a4e; border-radius: 4px; font-family: monospace; font-size: 14px; text-align: center;
+    }
+    .bpm-btn {
+      background: #2d3142; color: #e2e8f0; border: 1px solid #454b66;
+      padding: 6px 12px; font-size: 12px; font-weight: bold; border-radius: 4px; cursor: pointer;
+    }
+    .bpm-btn:hover { background: #454b66; color: #fff; }
+
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    .control-row {
+      background-color: #1e2235; padding: 15px; border-radius: 6px; border-left: 4px solid #78ffd6; display: flex; flex-direction: column;
+    }
+    .control-row label {
+      font-size: 13px; font-weight: bold; color: #a0aec0; margin-bottom: 8px; display: flex; justify-content: space-between;
+    }
+    .control-row label span { font-family: monospace; color: #78ffd6; font-size: 14px; }
+    .control-row input[type="range"] { width: 100%; margin: 0; cursor: pointer; }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;
+    }
+    button.action-btn {
+      padding: 12px; font-size: 15px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; transition: background-color 0.2s, transform 0.1s; color: #0f111a;
+    }
+    button.action-btn:active { transform: scale(0.98); }
+    #playBtn { background: linear-gradient(135deg, #a8ff78, #78ffd6); }
+    #playBtn:disabled { background: #2d3748; color: #4a5568; cursor: not-allowed; }
+    #saveBtn { background: linear-gradient(135deg, #00b4db, #0083b0); color: #fff; }
+    #saveBtn:disabled { background: #2d3748; color: #4a5568; cursor: not-allowed; }
+
+    .back-link { margin-top: 20px; color: #718096; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .back-link:hover { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>🎚️ オーディオ・ループ・プロセッサー</h1>
+
+    <!-- ① ファイル入力部 -->
+    <div class="file-select-zone" onclick="document.getElementById('audioFile').click()">
+      <span id="fileLabel">🎵 音声ファイルを選択 (まずはWavに対応)</span>
+      <input type="file" id="audioFile" accept="audio/*" style="display: none;">
+    </div>
+
+    <!-- ② 視覚化パネル -->
+    <div class="display-grid">
+      <div class="display-panel">
+        <div class="display-header">
+          <div class="display-label">WAVEFORM MONITOR</div>
+          <button id="popoutBtn" class="popout-btn" disabled>🔍 別タブで拡大表示</button>
+        </div>
+        <canvas id="waveCanvas"></canvas>
+      </div>
+
+      <div class="display-panel">
+        <div class="display-header">
+          <div class="display-label">FREQUENCY SPECTRUM (FFT)</div>
+        </div>
+        <canvas id="fftCanvas"></canvas> 
+      </div>
+    </div>
+
+    <!-- ②.5 自動解析＆結果表示パネル -->
+    <div class="analysis-panel">
+      <button id="analyzeBtn" disabled>🔍 音源のBPM・アタックを自動解析</button>
+      <div class="analysis-results">
+        <div>解析テンポ: <strong id="resBpm">---</strong> BPM</div>
+        <div>推奨スタート位置: <strong id="resAttack">0.000</strong> s</div>
+      </div>
+    </div>
+
+    <!-- ②.8 切り出し ＆ テンポ手動補正パネル（◀数値▶ ボタン組み込み版） -->
+    <div class="edit-panel">
+      <div class="edit-title">✂️ ループ範囲の切り出し・BPM手動補正</div>
+      
+      <!-- 開始秒数 -->
+      <div class="edit-row">
+        <label>
+          <div>切り出し開始位置 (Loop Start):</div>
+          <!-- ◀ ボタン ｜ 数値 ｜ ボタン ▶ の構造 -->
+          <div class="micro-adjust-group">
+            <button id="btnStartMinus" class="micro-btn" disabled>◀</button>
+            <span id="v-trimStart">0.000</span>
+            <span style="color:#718096; font-size:11px; margin-left:2px;">s</span>
+            <button id="btnStartPlus" class="micro-btn" disabled>▶</button>
+          </div>
+        </label>
+        <input type="range" id="trimStart" min="0" max="1" step="0.001" value="0" disabled>
+      </div>
+      <!-- 終了秒数 -->
+      <div class="edit-row">
+        <label>
+          <div>切り出し終了位置 (Loop End):</div>
+          <!-- ◀ ボタン ｜ 数値 ｜ ボタン ▶ の構造 -->
+          <div class="micro-adjust-group">
+            <button id="btnEndMinus" class="micro-btn" disabled>◀</button>
+            <span id="v-trimEnd">0.000</span>
+            <span style="color:#718096; font-size:11px; margin-left:2px;">s</span>
+            <button id="btnEndPlus" class="micro-btn" disabled>▶</button>
+          </div>
+        </label>
+        <input type="range" id="trimEnd" min="0" max="1" step="0.001" value="0" disabled>
+      </div>
+      <!-- BPM手動補正 -->
+      <div class="edit-row" style="flex-direction: row; justify-content: space-between; align-items: center; margin-top: 15px;">
+        <label style="margin-bottom: 0; width: auto;">テンポ（BPM）の手動修正・答え合わせ：</label>
+        <div class="bpm-fix-group">
+          <input type="number" id="manualBpm" class="bpm-input" min="30" max="300" value="120" disabled>
+          <span style="color:#ffb300; font-family:monospace; font-size:14px; margin-right:5px;">BPM</span>
+          <button id="btnBpmHalf" class="bpm-btn" disabled>/2 (半分)</button>
+          <button id="btnBpmDouble" class="bpm-btn" disabled>×2 (2倍)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ コントロールパネル -->
+    <div class="control-grid">
+      <div class="control-row">
+        <label>移調 (Pitch Shift / Detune): <span id="v-pitch">0</span> semitones</label>
+        <input type="range" id="pitch" min="-12" max="12" step="1" value="0">
+      </div>
+      <div class="control-row" style="border-left-color: #00b4db;">
+        <label>テンポ・再生速度 (Speed): <span id="v-speed">1.00</span> x</label>
+        <input type="range" id="speed" min="0.5" max="2.0" step="0.05" value="1.00">
+      </div>
+      <div class="control-row" style="border-left-color: #9b59b6;">
+        <label>変調・揺らぎ (Modulation Depth): <span id="v-mod">0</span> %</label>
+        <input type="range" id="mod" min="0" max="100" step="5" value="0">
+      </div>
+    </div>
+
+    <!-- ④ アクションボタン -->
+    <div class="button-group">
+      <button id="playBtn" class="action-btn" disabled>▶ 範囲内を試聴・ループ再生</button>
+      <button id="saveBtn" class="action-btn" disabled>📥 ループ用Wavとして保存</button>
+    </div>
+  </div>
+
+  <a href="../index.html" class="back-link">⬅ メインメニューに戻る</a>
+
+  <!-- 【拡張】読み込むスクリプトファイルに analyzer-engine.js を追加 -->
+  <script src="wave-renderer.js"></script>
+  <script src="audio-engine.js"></script>
+  <script src="analyzer-engine.js"></script>
+  <script src="wav-encoder.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

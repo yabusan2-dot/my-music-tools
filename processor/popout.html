@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>🔍 拡大波形モニター (Audio Loop Processor)</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #050608;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column; 
+      user-select: none;
+    }
+    
+    .info-bar {
+      width: 100%;
+      height: 35px; 
+      background-color: #111420;
+      border-bottom: 1px solid #23283d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 15px;
+      box-sizing: border-box;
+      font-family: monospace;
+      font-size: 12px;
+      color: #a0aec0;
+    }
+    .info-bar span {
+      color: #fff;
+    }
+    .time-counter {
+      background-color: #090a0f;
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid #303b4d;
+    }
+    .time-counter strong {
+      color: #78ffd6; 
+      font-size: 13px;
+    }
+
+    .canvas-container {
+      flex-grow: 1;
+      width: 100%;
+      height: calc(100vh - 35px); 
+      position: relative;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- デジタルカウンター表示バー -->
+  <div class="info-bar">
+    <div>📊 ZOOM MONITOR <span id="zoomStatus">(全体表示中)</span></div>
+    <div class="time-counter">
+      START: <strong id="digitalStart">0.000s</strong> &nbsp;|&nbsp; 
+      END: <strong id="digitalEnd">0.000s</strong> &nbsp;|&nbsp;
+      DURATION: <strong id="digitalDiff">0.000s</strong>
+    </div>
+    <div style="font-size: 11px; color: #718096;">※ダブルクリックでリセット</div>
+  </div>
+
+  <div class="canvas-container">
+    <canvas id="largeCanvas"></canvas>
+  </div>
+
+  <script src="wave-renderer.js"></script>
+  <script>
+    const canvas = document.getElementById('largeCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragCurrentX = 0;
+
+    let zoomStartRatio = 0.0;
+    let zoomEndRatio = 1.0;
+
+    const marginLeft = 45;
+
+    function refreshWaveform() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 35;
+      
+      if (window.opener && window.opener.currentAudioBuffer) {
+        let trimStart = 0;
+        let trimEnd = window.opener.currentAudioBuffer.duration;
+        
+        if (typeof window.opener.getUiParams === 'function') {
+          const params = window.opener.getUiParams();
+          trimStart = params.trimStart;
+          trimEnd = params.trimEnd;
+        }
+
+        drawZoomedWaveform(canvas, window.opener.currentAudioBuffer, zoomStartRatio, zoomEndRatio, trimStart, trimEnd);
+      } else {
+        drawWaveform(canvas, null);
+      }
+    }
+
+    function refreshWaveformExternal() {
+      zoomStartRatio = 0.0;
+      zoomEndRatio = 1.0;
+      refreshWaveform();
+    }
+
+    window.addEventListener('resize', refreshWaveform);
+
+    // マウスドラッグ範囲指定
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const canvasX = e.clientX - rect.left;
+      if (canvasX < marginLeft) return;
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragCurrentX = e.clientX;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      dragCurrentX = Math.max(marginLeft, e.clientX);
+      refreshWaveform();
+
+      ctx.fillStyle = 'rgba(79, 172, 254, 0.3)';
+      ctx.strokeStyle = '#4facfe';
+      ctx.lineWidth = 1;
+      const x = Math.min(dragStartX, dragCurrentX);
+      const width = Math.abs(dragStartX - dragCurrentX);
+      const height = canvas.height - 20;
+      ctx.fillRect(x, 0, width, height);
+      ctx.strokeRect(x, 0, width, height);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      const dragWidth = Math.abs(dragStartX - dragCurrentX);
+      if (dragWidth > 5) {
+        const drawWidth = canvas.width - marginLeft;
+        const xMin = Math.min(dragStartX, dragCurrentX) - marginLeft;
+        const xMax = Math.max(dragStartX, dragCurrentX) - marginLeft;
+        const currentRange = zoomEndRatio - zoomStartRatio;
+        const newStartRatio = zoomStartRatio + (xMin / drawWidth) * currentRange;
+        const newEndRatio = zoomStartRatio + (xMax / drawWidth) * currentRange;
+        zoomStartRatio = Math.max(0.0, newStartRatio);
+        zoomEndRatio = Math.min(1.0, newEndRatio);
+      }
+      refreshWaveform();
+    });
+
+    canvas.addEventListener('dblclick', () => {
+      zoomStartRatio = 0.0;
+      zoomEndRatio = 1.0;
+      refreshWaveform();
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshWaveform();
+    });
+
+    // ズーム限定描画関数
+    function drawZoomedWaveform(canvas, audioBuffer, startRatio, endRatio, trimStart = 0, trimEnd) {
+      // 【完全修正】第2引数を audioBuffer ➔ null に変更！
+      // これにより、背景の目盛りとハイライト色だけを綺麗にクリアした状態から拡大描画を始めます
+      drawWaveform(canvas, null, (window.opener ? window.opener.currentBpm : null), trimStart, trimEnd); 
+
+      const marginBottom = 20;
+      const width = canvas.width - marginLeft;
+      const height = canvas.height - marginBottom;
+
+      const channelData = audioBuffer.getChannelData(0);
+      const totalSamples = channelData.length;
+
+      const startSampleGlobal = Math.floor(totalSamples * startRatio);
+      const endSampleGlobal = Math.floor(totalSamples * endRatio);
+      const zoomedSamplesCount = endSampleGlobal - startSampleGlobal;
+
+      const blockSize = Math.ceil(zoomedSamplesCount / width);
+
+      // デジタルカウンター表示の計算
+      const totalDuration = audioBuffer.duration;
+      const startTimeSec = totalDuration * startRatio;
+      const endTimeSec = totalDuration * endRatio;
+      const rangeDuration = endTimeSec - startTimeSec;
+
+      document.getElementById('digitalStart').innerText = `${startTimeSec.toFixed(3)}s`;
+      document.getElementById('digitalEnd').innerText = `${endTimeSec.toFixed(3)}s`;
+      document.getElementById('digitalDiff').innerText = `${rangeDuration.toFixed(3)}s`;
+      
+      if (startRatio === 0.0 && endRatio === 1.0) {
+        document.getElementById('zoomStatus').innerText = "(全体表示中)";
+        document.getElementById('zoomStatus').style.color = "#718096";
+      } else {
+        document.getElementById('zoomStatus').innerText = "(拡大表示中)";
+        document.getElementById('zoomStatus').style.color = "#4facfe";
+      }
+
+      // 横軸メーターの秒数テキスト再計算
+      ctx.fillStyle = '#050608'; 
+      ctx.fillRect(marginLeft, height + 1, canvas.width, marginBottom);
+      
+      ctx.fillStyle = '#718096';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+
+      ctx.fillText(`${startTimeSec.toFixed(3)}s`, marginLeft, height + 4);
+      for (let i = 1; i < 10; i++) {
+        const x = marginLeft + (width / 10) * i;
+        const currentSecond = startTimeSec + (rangeDuration / 10) * i;
+        ctx.fillText(`${currentSecond.toFixed(3)}s`, x, height + 4);
+      }
+      ctx.fillText(`${endTimeSec.toFixed(3)}s`, canvas.width - 20, height + 4);
+
+      // 拡大画面用のBPMテンポガイドライン
+      const bpm = (window.opener && window.opener.currentBpm) ? window.opener.currentBpm : null;
+      if (bpm && bpm > 0) {
+        const beatDuration = 60 / bpm; 
+        ctx.save();
+        ctx.strokeStyle = '#ffb300';  
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);      
+        ctx.beginPath();
+        for (let time = beatDuration; time < totalDuration; time += beatDuration) {
+          if (time >= startTimeSec && time <= endTimeSec) {
+            const localRatio = (time - startTimeSec) / rangeDuration;
+            const x = marginLeft + (width * localRatio);
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // ズーム波形自体の再描画
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#78ffd6';
+
+      for (let i = 0; i < width; i++) {
+        const startSample = startSampleGlobal + (i * blockSize);
+        if (startSample >= endSampleGlobal || startSample >= totalSamples) break;
+
+        const currentSec = (startSample / totalSamples) * totalDuration;
+        const tEndVal = trimEnd || totalDuration;
+        const isInRange = (currentSec >= trimStart && currentSec <= tEndVal);
+        ctx.strokeStyle = isInRange ? '#78ffd6' : '#233038'; 
+
+        let min = 1.0;
+        let max = -1.0;
+        let hasData = false;
+
+        for (let j = 0; j < blockSize; j++) {
+          const sampleIdx = startSample + j;
+          if (sampleIdx >= endSampleGlobal || sampleIdx >= totalSamples) break;
+          const val = channelData[sampleIdx];
+          if (val < min) min = val;
+          if (val > max) max = val;
+          hasData = true;
+        }
+
+        if (hasData) {
+          const yMin = ((min + 1) * 0.5) * height;
+          const yMax = ((max + 1) * 0.5) * height;
+          ctx.beginPath();
+          ctx.moveTo(marginLeft + i, yMin);
+          ctx.lineTo(marginLeft + i, yMax);
+          ctx.stroke();
+        }
+      }
+      ctx.shadowBlur = 0;
+    }
+  </script>
+</body>
+</html>
