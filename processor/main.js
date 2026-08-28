@@ -27,7 +27,10 @@ function getUiParams() {
     bpm: parseFloat(document.getElementById('manualBpm').value) || window.currentBpm || null,
     pitch: parseFloat(document.getElementById('pitch').value),
     speed: parseFloat(document.getElementById('speed').value),
-    mod: parseFloat(document.getElementById('mod').value)
+    mod: parseFloat(document.getElementById('mod').value),
+    // --- 【新設】 ---
+    lpf: parseFloat(document.getElementById('lpf').value) || 20000,
+    hpf: parseFloat(document.getElementById('hpf').value) || 2
   };
 }
 
@@ -231,6 +234,14 @@ document.getElementById('mod').addEventListener('input', (e) => {
   if (isPlaying) updateLiveParameters(getUiParams());
 });
 
+// 2. スライダーを動かした時の数値書き換え ＆ リアルタイム音響変化イベントを末尾付近に足す
+['lpf', 'hpf'].forEach(id => {
+  document.getElementById(id).addEventListener('input', (e) => {
+    document.getElementById(`v-${id}`).innerText = e.target.value; // 文字書き換え
+    if (isPlaying) updateLiveParameters(getUiParams()); // 音をリアルタイム変化
+  });
+});
+
 document.getElementById('manualBpm').addEventListener('input', (e) => {
   window.currentBpm = parseFloat(e.target.value) || null;
   resizeCanvas();
@@ -285,20 +296,56 @@ function renderLoop() {
   if (!isPlaying) return;
 
   const p = getUiParams();
+  // 1. メイン画面の波形とピンク線を描画（既存処理）
   drawWaveform(waveCanvas, window.currentAudioBuffer, window.currentBpm, p.trimStart, p.trimEnd);
   
   const progress = getPlaybackProgress(); 
   const marginLeft = 45; 
-  const waveWidth = waveCanvas.width - marginLeft;
-  const waveHeight = waveCanvas.height - 20;
   
-  const lineX = marginLeft + (waveWidth * progress);
+  let waveWidth = waveCanvas.width - marginLeft;
+  let waveHeight = waveCanvas.height - 20;
+  let lineX = marginLeft + (waveWidth * progress);
   
-  const ctx = waveCanvas.getContext('2d');
+  let ctx = waveCanvas.getContext('2d');
   ctx.strokeStyle = '#ff3366'; 
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(lineX, 0); ctx.lineTo(lineX, waveHeight); ctx.stroke();
 
+  // ==========================================================
+  // 🚨 【新設】2. もし別ウィンドウが開いていたら、あちらの拡大図にもピンク線を引く
+  // ==========================================================
+  if (popoutWindow && !popoutWindow.closed) {
+    // 子ウィンドウ側のリフレッシュ関数を呼んで拡大波形を再描画
+    popoutWindow.refreshWaveform();
+    
+    // 子ウィンドウのキャンバスとコンテキストを直接取得
+    const subCanvas = popoutWindow.document.getElementById('largeCanvas');
+    if (subCanvas) {
+      const subCtx = subCanvas.getContext('2d');
+      const subWidth = subCanvas.width - marginLeft;
+      const subHeight = subCanvas.height - 20;
+      
+      // 子ウィンドウは「ズーム表示」されているため、全体の比率（progress）を
+      // 現在拡大表示されている範囲（zoomStartRatio 〜 zoomEndRatio）のローカル座標へスケール変換する
+      const startRatio = popoutWindow.zoomStartRatio;
+      const endRatio = popoutWindow.zoomEndRatio;
+      
+      if (progress >= startRatio && progress <= endRatio) {
+        const localRatio = (progress - startRatio) / (endRatio - startRatio);
+        const subLineX = marginLeft + (subWidth * localRatio);
+        
+        // 拡大画面にもピンクのネオンラインを走らせる
+        subCtx.strokeStyle = '#ff3366';
+        subCtx.lineWidth = 2;
+        subCtx.beginPath();
+        subCtx.moveTo(subLineX, 0);
+        subCtx.lineTo(subLineX, subHeight);
+        subCtx.stroke();
+      }
+    }
+  }
+
+  // 3. FFTアナライザーの描画（既存処理）
   const fftData = getFFTData();
   drawFFTGraph(fftCanvas, fftData);
 
@@ -349,8 +396,13 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     const renderedBuffer = await Tone.Offline(async (context) => {
       const offlineTremolo = new Tone.Tremolo(6, p.mod / 100).toDestination().start();
       
+        // 【新設】保存用の裏側コンテキストにも同じ直列エフェクトフィルターを構築！
+      const offlineLPF = new Tone.Filter(p.lpf, "lowpass").connect(offlineTremolo);
+      const offlineHPF = new Tone.Filter(p.hpf, "highpass").connect(offlineLPF);
+      
+      
       // 【修正】保存用エディターでも GrainPlayer に変更してピッチを独立固定化
-      const offlinePlayer = new Tone.GrainPlayer(window.currentAudioBuffer).connect(offlineTremolo);
+      const offlinePlayer = new Tone.GrainPlayer(window.currentAudioBuffer).connect(offlineHPF);
       offlinePlayer.grainSize = 0.1;
       offlinePlayer.overlap = 0.05;
       

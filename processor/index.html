@@ -254,7 +254,7 @@
 
     <!-- ① ファイル入力部 -->
     <div class="file-select-zone" onclick="document.getElementById('audioFile').click()">
-      <span id="fileLabel">🎵 音声ファイルを選択 (まずはWavに対応)</span>
+      <span id="fileLabel">🎵 音声ファイルを選択</span>
       <input type="file" id="audioFile" accept="audio/*" style="display: none;">
     </div>
 
@@ -278,7 +278,7 @@
 
     <!-- ②.5 自動解析＆結果表示パネル -->
     <div class="analysis-panel">
-      <button id="analyzeBtn" disabled>🔍 音源のBPM・アタックを自動解析</button>
+      <button id="analyzeBtn" disabled>🔍 音源のBPM・リズムを自動解析</button>
       <div class="analysis-results">
         <div>解析テンポ: <strong id="resBpm">---</strong> BPM</div>
         <div>推奨スタート位置: <strong id="resAttack">0.000</strong> s</div>
@@ -319,7 +319,7 @@
       </div>
       <!-- BPM手動補正 -->
       <div class="edit-row" style="flex-direction: row; justify-content: space-between; align-items: center; margin-top: 15px;">
-        <label style="margin-bottom: 0; width: auto;">テンポ（BPM）の手動修正・答え合わせ：</label>
+        <label style="margin-bottom: 0; width: auto;">テンポ（BPM）の手動修正：</label>
         <div class="bpm-fix-group">
           <input type="number" id="manualBpm" class="bpm-input" min="30" max="300" value="120" disabled>
           <span style="color:#ffb300; font-family:monospace; font-size:14px; margin-right:5px;">BPM</span>
@@ -343,6 +343,14 @@
         <label>変調・揺らぎ (Modulation Depth): <span id="v-mod">0</span> %</label>
         <input type="range" id="mod" min="0" max="100" step="5" value="0">
       </div>
+      <div class="control-row" style="border-left-color: #e67e22;">
+        <label>ローパス・高音カット (Low Pass Filter): <span id="v-lpf">20000</span> Hz</label>
+        <input type="range" id="lpf" min="200" max="20000" step="50" value="20000">
+      </div>
+      <div class="control-row" style="border-left-color: #e74c3c;">
+        <label>ハイパス・低音カット (High Pass Filter): <span id="v-hpf">20</span> Hz</label>
+        <input type="range" id="hpf" min="20" max="2000" step="5" value="20">
+      </div>
     </div>
 
     <!-- ④ アクションボタン -->
@@ -359,6 +367,7 @@
   <script src="audio-engine.js"></script>
   <script src="analyzer-engine.js"></script>
   <script src="wav-encoder.js"></script>
+  <script src="popout-zoom.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
