@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Music Creation Toolkit</title>
-  <style>
+    <style>
     /* 全体のスタイル（ダークモード・近未来風） */
     body {
       margin: 0;
@@ -47,6 +47,7 @@
       max-width: 1000px;
       width: 90%;
       padding: 20px;
+      margin: 0 auto;
       margin-bottom: 50px;
     }
 
@@ -120,16 +121,22 @@
       font-size: 0.8rem;
     }
   </style>
-</head>
+  </head>
 <body>
-
+<!-- 1. 3Dアニメーションのための外枠（ステージ） -->
+<div id="wrapper3d" style="perspective: 1000px; width: 100vw; height: 100vh; overflow-x: hidden; position: relative;">
+  <div id="card3d" style="width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
+    
+    <!-- ==================== 【表面】ツール画面 ==================== -->
+    <div id="frontSide" style="position: absolute; width: 100%; height: 100%; backface-visibility: hidden; overflow-y: auto;">
+      
   <header>
     <h1>WEB MUSIC CREATION TOOLKIT</h1>
     <p>ゲーム制作・Web開発のためのサウンドクリエイティブ環境</p>
   </header>
+      
 
-  <main class="menu-container">
-
+<main class="menu-container">
     <!-- 1. 効果音ジェネレーター -->
     <a href="se-generator/index.html" class="menu-card">
       <div class="card-icon">👾</div>
@@ -171,11 +178,142 @@
       <h3 style="card-title">BGM合成・結合ミキサー</h3>
       <div class="card-desc">整形されたループ音源同士を完全同期して重ね合わせ、または一本に美しく直列結合して最終的なゲーム用BGMを出力します。</div>
     </a>
-  </main>
+    </main>
+      
+      <!-- 🎮 ギミック起動ボタン（レトロゲーム風） -->
+      <div style="text-align: center; margin: 30px 0;">
+        <button id="flipToSlidesBtn" style="padding: 15px 30px; font-size: 18px; font-family: monospace; background-color: #ff0055; color: white; border: 4px solid #fff; box-shadow: 0 0 10px #ff0055; cursor: pointer; font-weight: bold; text-transform: uppercase;">
+          [ LOAD IMAGES ]
+        </button>
+      </div>
 
+      <!-- ※ここに現在の効果音ジェネレーターやミキサーなどのコードが続きます -->
+
+    </div>
+
+    <!-- ==================== 【裏面】画像スライドショー画面 ==================== -->
+    <div id="backSide" style="position: absolute; width: 100%; height: 100%; backface-visibility: hidden; transform: rotateY(180deg); background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center;">
+      
+      <!-- ✕ 元に戻るボタン -->
+      <button id="flipToHomeBtn" style="position: absolute; top: 20px; right: 20px; padding: 10px 20px; font-family: monospace; background-color: #333; color: #fff; border: 2px solid #fff; cursor: pointer; z-index: 10;">
+        [ BACK TO TOOLKIT ]
+      </button>
+      
+      <!-- 🖼️ 画像表示コンテナ -->
+      <div id="slideShowContainer" style="position: relative; width: 80%; height: 80%; display: flex; justify-content: center; align-items: center;">
+        <!-- JavaScriptでここに画像が動的に挿入されます -->
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 2. 回転＆スライドショー制御スクリプト -->
+<script>
+  const card = document.getElementById('card3d');
+  const toSlidesBtn = document.getElementById('flipToSlidesBtn');
+  const toHomeBtn = document.getElementById('flipToHomeBtn');
+  const slideContainer = document.getElementById('slideShowContainer');
+
+  // 📁 GitHubにアップロードする画像パスの配列（ご自身の画像名に変えてください）
+  const images = [
+    'images/slide1.png',
+    'images/slide2.png',
+    'images/slide3.png',
+    'images/slide4.png',
+    'images/slide5.png',
+    'images/slide6.png',
+    'images/slide7.png',
+    'images/slide8.png',
+    'images/slide9.png',
+    'images/slide10.png',
+    'images/slide11.png',
+    'images/slide12.png',
+    'images/slide13.png'
+  ];
+  
+  let currentIdx = 0;
+  let slideTimer = null;
+
+  // 🔄 画像を切り替える関数（フェードイン演出付き）
+  function showNextSlide() {
+    // 既存の画像をフェードアウト
+    const oldImg = slideContainer.querySelector('img');
+    if (oldImg) {
+      oldImg.style.opacity = 0;
+      // アニメーション後に古い画像を消す
+      setTimeout(() => oldImg.remove(), 500);
+    }
+
+    // 新しい画像を生成
+    const img = document.createElement('img');
+    img.src = images[currentIdx];
+    img.style.cssText = "position: absolute; max-width: 100%; max-height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.5s ease-in-out;";
+    slideContainer.appendChild(img);
+
+    // 次のタイミングでフェードイン
+    setTimeout(() => { img.style.opacity = 1; }, 50);
+
+    // インデックスを次に進める（ループ）
+    currentIdx = (currentIdx + 1) % images.length;
+  }
+
+  // ▶️ ボタンを押して「裏面」へ（スライドショー開始）
+  toSlidesBtn.addEventListener('click', function() {
+    
+  // 1〜4の数値をランダムに選ぶ
+  const pattern = Math.floor(Math.random() * 4) + 1;
+  
+  // パターンに応じて回転の方向や速度を変える
+  if (pattern === 1) {
+    card.style.transform = 'rotateY(180deg)'; // 通常の右回転
+  } else if (pattern === 2) {
+      backSide.style.transform = 'rotateX(180deg)';
+      card.style.transform = 'rotateX(180deg)';
+  } else if (pattern === 3) {
+    card.style.transform = 'rotateY(540deg)'; // 1回転半する高速スピン
+    card.style.transition = 'transform 0.4s ease-in'; // 速度も速くする
+  } else if (pattern === 4) {
+    //card.style.transform = 'scale(0.3) rotate(360deg)'; // 縮小しながら回転
+      // 💡 裏面の待ち伏せ角度を横回転(Y)に合わせる
+  backSide.style.transform = 'rotateY(180deg)';
+
+  // 💡 0.3倍に縮小しつつ、Y軸を中心に540度（1回転半）回転して裏返す！
+  // 最後に「scale(1)」に戻して画面いっぱいに広げます
+  card.style.transform = 'scale(0.3) rotateY(540deg)';
+
+  // 回転と縮小が極まるタイミング（約0.4秒後）に、サイズを100%（裏面全画面）に戻す
+  setTimeout(() => {
+    card.style.transform = 'scale(1) rotateY(540deg)';
+  }, 400);
+  }
+    
+    // 回転が終わる頃（0.8秒後）にスライドショーを開始
+    setTimeout(() => {
+      currentIdx = 0;
+      showNextSlide();
+      // 3秒ごとに自動切り替え
+      slideTimer = setInterval(showNextSlide, 3000);
+    }, 800);
+  });
+
+  // ⏹️ 戻るボタンを押して「表面」へ（スライドショー停止）
+  toHomeBtn.addEventListener('click', function() {
+    card.style.transform = 'rotateY(0deg)';
+    
+    backSide.style.transform = 'rotateY(180deg)';
+    
+    
+    // タイマーを止めて中身をクリア
+    clearInterval(slideTimer);
+    setTimeout(() => {
+      slideContainer.innerHTML = '';
+    }, 800);
+  });
+</script>
+
+</body>
   <footer>
     &copy; 2026 Web Music Creation Toolkit. All Rights Reserved.
   </footer>
-
-</body>
 </html>
