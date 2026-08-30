@@ -1,15 +1,14 @@
 ﻿        const actx = new(window.AudioContext||window.webkitAudioContext)(); let pName = 'jump';
         const getV = (id) => (id==='type'||id==='ramp') ? document.getElementById(id).value : parseFloat(document.getElementById(id).value);
-        function up() { ['echo','nMix','sF','eF','dur'].forEach(k => { document.getElementById('v-'+k).textContent = document.getElementById(k).value; }); toggleFmContainer(); genC(); }
+
+        function up() { 
+                ['echo','nMix','sF','eF','dur'].forEach(k => { 
+                document.getElementById('v-'+k).textContent = document.getElementById(k).value;
+                 }); 
+                genC(); 
+        }
+
         function copyC() { navigator.clipboard.writeText(document.getElementById('cText').textContent); }
-        
-        function toggleFmContainer() {
-    const waveType = document.getElementById('type').value;
-    const fmContainer = document.querySelector('.fm-container');
-    
-    // sine波のときだけ「flex」で表示、それ以外は「none」で非表示
-    fmContainer.style.display = (waveType === 'sine') ? 'flex' : 'none';
-}
 
         function drawWaveIcon() {
             const type = document.getElementById('type').value;
@@ -46,8 +45,8 @@
             container.innerHTML = `<svg width="60" height="34"><path d="${path}" class="ramp-svg"/></svg>`;
         }
 
-// 1. 引数に rate と amp を追加
-function sGraph(ctx, echo, nMix, type, sF, eF, dur, ramp, rate, amp) {
+    // 1. 引数に rate と amp を追加
+    function sGraph(ctx, echo, nMix, type, sF, eF, dur, ramp, rate, amp) {
     const mG = ctx.createGain(); mG.connect(ctx.destination); const now = ctx.currentTime;
     mG.gain.setValueAtTime(0.28, now); mG.gain.exponentialRampToValueAtTime(0.001, now + dur + (echo > 0 ? 1.0 : 0));
     let dNode = null, fG = null;
@@ -67,16 +66,20 @@ function sGraph(ctx, echo, nMix, type, sF, eF, dur, ramp, rate, amp) {
     let osc = null, modOsc = null; 
     if (1 - nMix > 0) {
         osc = ctx.createOscillator(); const tG = ctx.createGain(); 
-        let tFactor = 0.1; if (type === 'sine') tFactor = 0.65; else if (type === 'triangle') tFactor = 0.35;
-        tG.gain.setValueAtTime((1 - nMix) * tFactor, now); osc.type = type; osc.frequency.setValueAtTime(sF, now);
+        let tFactor = 0.4;
+        if (type === 'sine') tFactor = 1.5; 
+        else if (type === 'triangle') tFactor = 0.85;
+        tG.gain.setValueAtTime((1 - nMix) * tFactor, now);
+        osc.type = type; 
+        osc.frequency.setValueAtTime(sF, now);
+
         if (ramp === 'linear') osc.frequency.linearRampToValueAtTime(eF, now + dur);
         else if (ramp === 'exponential') osc.frequency.exponentialRampToValueAtTime(Math.max(1, eF), now + dur);
         else if (ramp === 'jump') osc.frequency.setValueAtTime(eF, now + (dur * 0.25));
 
         // ★★★ ここからFM合成（数式FM合成のWeb Audio API版表現）★★★
-        if (type === 'sine' && amp > 0) {
             modOsc = ctx.createOscillator(); // 変化速度（モジュレータ）用のオシレーター
-            const modGain = ctx.createGain(); // 変化の強さ（振幅）用のゲイン
+            modGain = ctx.createGain(); // 変化の強さ（振幅）用のゲイン
 
             modOsc.type = 'sine';
             modOsc.frequency.setValueAtTime(rate, now); // 変化速度（Hz）
@@ -85,10 +88,13 @@ function sGraph(ctx, echo, nMix, type, sF, eF, dur, ramp, rate, amp) {
             // 接続の魔法： modOsc ➔ modGain ➔ メインオシレーターの周波数パラメータ
             modOsc.connect(modGain);
             modGain.connect(osc.frequency); 
-        }
+
         // ★★★ ここまで ★★★
 
-        osc.connect(tG); tG.connect(mG); tG.connect(outNode);
+        osc.connect(tG);
+        tG.connect(mG); 
+        tG.connect(outNode);
+
     }
     // play関数側で start/stop 制御できるように、modOsc も一緒に返却する
     return { nS, osc, modOsc };
@@ -115,13 +121,14 @@ function play() {
     s.modOsc.start();
     s.modOsc.stop(actx.currentTime+getV('dur'));
     } 
-    
+
     if (s.osc) {
         s.osc.onended = () => {
             // メインの接続を解除
             if (s.osc) s.osc.disconnect();
             // ★今回のFM合成用ノード（modOsc）があればそれも切断！
-            if (s.modOsc) s.modOsc.disconnect(); 
+            if (s.modOsc) s.modOsc.disconnect();  
+
             // ノイズ（nS）があればそれも切断
             if (s.nS) s.nS.disconnect();
         };
@@ -162,14 +169,47 @@ function genC() {
 }
 
         function dlWav() {
-            const ec = getV('echo'), nM = getV('nMix'), ty = getV('type'), sF = getV('sF'), eF = getV('eF'), du = getV('dur'), ra = getV('ramp'), rate = 44100, totalD = du + (ec > 0 ? 1.0 : 0), frames = rate * totalD, octx = new OfflineAudioContext(1, frames, rate);
-            const s = sGraph(octx, ec, nM, ty, sF, eF, du, ra); if(s.nS){s.nS.start(0);s.nS.stop(du);} if(s.osc){s.osc.start(0);s.osc.stop(du);}
+            const ec = getV('echo'), nM = getV('nMix'), ty = getV('type'), sF = getV('sF'), eF = getV('eF'), du = getV('dur'), fr = getV('rate'), fa = getV('amp'), ra = getV('ramp'), rate = 44100, totalD = du + (ec > 0 ? 1.0 : 0), frames = rate * totalD, octx = new OfflineAudioContext(1, frames, rate);
+            const s = sGraph(octx, ec, nM, ty, sF, eF, du, ra, fr, fa ); 
+            if(s.nS){
+                s.nS.start(0);
+                s.nS.stop(du);
+                } 
+            if(s.osc){
+                s.osc.start(0);
+                s.osc.stop(du);
+                }
+            if(s.modOsc){
+                s.modOsc.start(0);
+                s.modOsc.stop(du);
+                }
+            if (s.osc) {
+        s.osc.onended = () => {
+            if (s.osc) s.osc.disconnect();
+            if (s.modOsc) s.modOsc.disconnect(); 
+            if (s.nS) s.nS.disconnect();
+        };
+    } else if (s.nS) {
+        s.nS.onended = () => {
+        if (s.nS) s.nS.disconnect();
+    };
+    }
             octx.startRendering().then(buf => {
                 let res = buf.getChannelData(0), bl = res.length * 2, ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
                 const wS = (o, s) => { for (let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
-                wS(0, 'RIFF'); v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); wS(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); wS(36, 'data'); v.setUint32(40, bl, true);
-                for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
-                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); a.download = `${pName}_effect.wav`; a.click();
+                wS(0, 'RIFF'); 
+            v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); 
+            wS(12, 'fmt '); v.setUint32(16, 16, true); 
+            v.setUint16(20, 1, true); v.setUint16(22, 1, true); 
+            v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); 
+            v.setUint16(32, 2, true); 
+            v.setUint16(34, 16, true); wS(36, 'data'); 
+            v.setUint32(40, bl, true);
+                for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); 
+            v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+                const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); 
+            a.download = `${pName}_effect.wav`; a.click();
             });
         }
 
@@ -247,6 +287,114 @@ function genC() {
         function rFavs() { const f = getF(), list = document.getElementById('fList'); 
         list.innerHTML = ''; const keys = Object.keys(f); 
         if (keys.length === 0) { list.innerHTML = '<div style="color:#777;text-align:center;">なし</div>'; return; } keys.forEach(n => { const div = document.createElement('div'); div.style = 'display:flex; justify-content:space-between; margin-bottom:3px;'; div.innerHTML = `<span style="cursor:pointer;color:#a9ffb4;" onclick="loadF('${n}')">⭐ ${n}</span><button style="background:#e53935;color:#fff;padding:2px 5px;font-size:0.7rem;" onclick="delF('${n}')">消去</button>`; list.appendChild(div); }); }
+        
+        function playMulti() {
+            if (actx.state === 'suspended') actx.resume();
+
+            const count = 10; // 複製数（UIから取得）
+            const totalDuration = getV('dur'); // ベースの長さ
+            const now = actx.currentTime;
+
+            // 複製数ぶんループを回して、時間差でトリガーする
+            for (let i = 0; i < count; i++) {
+                // 例：0秒 〜 0.1秒の間でランダムに発音タイミングをズラす（前に無音を入れるのと同じ効果）
+                //const randomDelay = Math.random() * 0.5;
+                const randomDelay = 0.05 + 0.05 *i;
+                const startTime = now + randomDelay;
+
+                // 既存のグラフ構築関数をそのまま利用して、新しいノード（音源）を生成
+                const s = sGraph(actx, getV('echo'), getV('nMix'), getV('type'), getV('sF'), getV('eF'), totalDuration, getV('ramp'), getV('rate'), getV('amp'));
+
+                // 指定した未来の時間（startTime）に再生・停止を予約する
+                if (s.nS) {
+                    s.nS.start(startTime);
+                    s.nS.stop(startTime + totalDuration);
+                }
+                if (s.osc) {
+                    s.osc.start(startTime);
+                    s.osc.stop(startTime + totalDuration);
+                }
+                if (s.modOsc) {
+                    s.modOsc.start(startTime);
+                    s.modOsc.stop(startTime + totalDuration);
+                }
+
+                // 昨日入れたクリーンアップ処理（disconnect）もここに紐付けておく
+                // （各ノードがそれぞれの終了タイミングで自動消滅するようにする）
+                    if (s.osc) {
+        s.osc.onended = () => {
+            // メインの接続を解除
+            if (s.osc) s.osc.disconnect();
+            // ★今回のFM合成用ノード（modOsc）があればそれも切断！
+            if (s.modOsc) s.modOsc.disconnect(); 
+            // ノイズ（nS）があればそれも切断
+            if (s.nS) s.nS.disconnect();
+        };
+    } else if (s.nS) {
+        // オシレーターがなく、ノイズだけの音源の場合
+        s.nS.onended = () => {
+        if (s.nS) s.nS.disconnect();
+    };
+    }
+            }
+        }
+
+        function dlWavml() {
+           const count = 10; // 複製数（UIから取得）
+            const totalDuration = getV('dur'); // ベースの長さ
+            const now = actx.currentTime;
+            const ec = getV('echo'), nM = getV('nMix'), ty = getV('type'), sF = getV('sF'), eF = getV('eF'), du = getV('dur'), fr = getV('rate'), fa = getV('amp'), ra = getV('ramp'), rate = 44100, totalD = du + (ec > 0 ? 1.0 : 0), frames = rate * totalD, octx = new OfflineAudioContext(1, frames, rate);
+
+            for (let i = 0; i < count; i++) {
+                // 例：0秒 〜 0.1秒の間でランダムに発音タイミングをズラす（前に無音を入れるのと同じ効果）
+                //const randomDelay = Math.random() * 0.5;
+                const randomDelay = 0.05 + 0.05 *i;
+                const startTime = now + randomDelay;
+
+            const s = sGraph(octx, ec, nM, ty, sF, eF, du, ra, fr, fa ); 
+            if(s.nS){
+                s.nS.start(randomDelay);
+                s.nS.stop(du + randomDelay);
+                } 
+            if(s.osc){
+                s.osc.start(randomDelay);
+                s.osc.stop(du + randomDelay);
+                }
+            if(s.modOsc){
+                s.modOsc.start(randomDelay);
+                s.modOsc.stop(du + randomDelay);
+                }
+            if (s.osc) {
+                s.osc.onended = () => {
+                    if (s.osc) s.osc.disconnect();
+                    if (s.modOsc) s.modOsc.disconnect(); 
+                    if (s.nS) s.nS.disconnect();
+                };
+            } else if (s.nS) {
+                s.nS.onended = () => {
+                    if (s.nS) s.nS.disconnect();
+                };
+            }
+            }
+            octx.startRendering().then(buf => {
+                let res = buf.getChannelData(0), bl = res.length * 2, ab = new ArrayBuffer(44 + bl), v = new DataView(ab);
+                const wS = (o, s) => { for (let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
+                wS(0, 'RIFF'); 
+            v.setUint32(4, 36 + bl, true); wS(8, 'WAVE'); 
+            wS(12, 'fmt '); v.setUint32(16, 16, true); 
+            v.setUint16(20, 1, true); v.setUint16(22, 1, true); 
+            v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); 
+            v.setUint16(32, 2, true); 
+            v.setUint16(34, 16, true); wS(36, 'data'); 
+            v.setUint32(40, bl, true);
+                for (let i=0; i<res.length; i++) { let s = Math.max(-1, Math.min(1, res[i])); 
+            v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+                const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(new Blob([v], { type: 'audio/wav' })); 
+            a.download = `${pName}_Multi.wav`; a.click();
+            });
+        }
+        
         
         // 🔴 初回起動時に波形図と変化図の両方を描画
         rFavs(); drawWaveIcon(); drawRampIcon(); up();
