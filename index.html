@@ -183,11 +183,9 @@
       <!-- 🎮 ギミック起動ボタン（レトロゲーム風） -->
       <div style="text-align: center; margin: 30px 0;">
         <button id="flipToSlidesBtn" style="padding: 15px 30px; font-size: 18px; font-family: monospace; background-color: #ff0055; color: white; border: 4px solid #fff; box-shadow: 0 0 10px #ff0055; cursor: pointer; font-weight: bold; text-transform: uppercase;">
-          [ LOAD IMAGES ]
+          [ ツールの紹介 ]
         </button>
       </div>
-
-      <!-- ※ここに現在の効果音ジェネレーターやミキサーなどのコードが続きます -->
 
     </div>
 
@@ -196,12 +194,11 @@
       
       <!-- ✕ 元に戻るボタン -->
       <button id="flipToHomeBtn" style="position: absolute; top: 20px; right: 20px; padding: 10px 20px; font-family: monospace; background-color: #333; color: #fff; border: 2px solid #fff; cursor: pointer; z-index: 10;">
-        [ BACK TO TOOLKIT ]
+        [ 戻る ]
       </button>
       
       <!-- 🖼️ 画像表示コンテナ -->
       <div id="slideShowContainer" style="position: relative; width: 80%; height: 80%; display: flex; justify-content: center; align-items: center;">
-        <!-- JavaScriptでここに画像が動的に挿入されます -->
       </div>
     </div>
 
@@ -215,7 +212,6 @@
   const toHomeBtn = document.getElementById('flipToHomeBtn');
   const slideContainer = document.getElementById('slideShowContainer');
 
-  // 📁 GitHubにアップロードする画像パスの配列（ご自身の画像名に変えてください）
   const images = [
     'images/slide1.png',
     'images/slide2.png',
