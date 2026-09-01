@@ -214,6 +214,12 @@ function genC() {
         }
 
         const presets = {
+            magic: { noiseMix: 0.1, type: 'sine', startFreq: 590, endFreq: 1770, duration: 1.0, ramp: 'linear', echo: 0.1 , rate: 10 , amp: 130 },
+            frog: { noiseMix: 0, type: 'sine', startFreq: 540, endFreq: 1330, duration: 0.3, ramp: 'exponential', echo: 0.2 , rate: 70 , amp: 525 },
+            warp: { noiseMix: 0, type: 'triangle', startFreq: 2000, endFreq: 900, duration: 1.0, ramp: 'exponential', echo: 0.4 , rate: 10 , amp: 615 },
+            bird: { noiseMix: 0, type: 'triangle', startFreq: 4080, endFreq: 5040, duration: 0.6, ramp: 'linear', echo: 0.1 , rate: 10 , amp: 750 },
+            insect: { noiseMix: 0, type: 'triangle', startFreq: 5600, endFreq: 6000, duration: 1.6, ramp: 'exponential', echo: 0.2 , rate: 0 , amp: 0 },
+            sword: { noiseMix: 0.2, type: 'sine', startFreq: 5260, endFreq: 7220, duration: 0.1, ramp: 'linear', echo: 0.2 , rate: 1500 , amp: 800 }, 
             explosion: { noiseMix: 0.8, type: 'sawtooth', startFreq: 200, endFreq: 40, duration: 0.5, ramp: 'linear', echo: 0 , rate: 0 , amp: 0 }, 
             sandstorm: { noiseMix: 1, type: 'sine', startFreq: 440, endFreq: 440, duration: 1.5, ramp: 'linear', echo: 0, rate: 0 , amp: 300 },
             laser: { noiseMix: 0.2, type: 'sawtooth', startFreq: 1600, endFreq: 100, duration: 0.25, ramp: 'linear', echo: 0.4, rate: 0 , amp: 0 }, 

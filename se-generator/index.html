@@ -7,8 +7,8 @@
     <style>
         body { font-family: "Helvetica Neue", Arial, "Hiragino Sans",
   "Noto Sans JP", sans-serif,
-  "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; background: #1e1e24; color: #fff; padding: 15px; max-width: 450px; margin: 0 auto; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 15px; }
+  "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; background: #1e1e24; color: #fff; padding: 15px; max-width: 500px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 15px; }
         button { background: #00bcd4; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; color: #1e1e24; font-size: 0.85rem; }
         button.preset { background: #444; color: #ccc; }
         button.preset:hover { background: #555; color: #fff; }
@@ -30,9 +30,15 @@
         <button class="preset" onclick="loadP('explosion')">💥爆発</button>
         <button class="preset" onclick="loadP('sandstorm')">📺砂嵐</button>
         <button class="preset" onclick="loadP('laser')">🔫レーザー</button>
-        <button class="preset" onclick="loadP('coin')">🪙コイン</button>
+        <button class="preset" onclick="loadP('coin')">💰コイン</button>
         <button class="preset" onclick="loadP('jump')">🦘ジャンプ</button>
         <button class="preset" onclick="loadP('hit')">🥊打撃</button>
+        <button class="preset" onclick="loadP('frog')">🐸カエル</button>
+        <button class="preset" onclick="loadP('bird')">🕊️鳥</button>
+        <button class="preset" onclick="loadP('insect')">🐝虫（多重）</button>
+        <button class="preset" onclick="loadP('sword')">⚔️剣（多重）</button>
+        <button class="preset" onclick="loadP('warp')">🌀ワープ（多重）</button>
+        <button class="preset" onclick="loadP('magic')">🧙‍魔法（多重）</button>
     </div>
     <div style="display:flex; gap:5px; margin-bottom:15px;">
         <input type="text" id="fIn" placeholder="お気に入りの名前" style="flex:1;">
@@ -69,8 +75,8 @@
     </div>
 </div>
 
-    <div class="row"><label>始動周波数(Hz): <span id="v-sF">150</span></label><input type="range" id="sF" min="40" max="2000" step="10" value="150" oninput="drawRampIcon(); up();" onchange="play()"></div>
-    <div class="row"><label>終了周波数(Hz): <span id="v-eF">600</span></label><input type="range" id="eF" min="40" max="2000" step="10" value="600" oninput="drawRampIcon(); up();" onchange="play()"></div>
+    <div class="row"><label>始動周波数(Hz): <span id="v-sF">150</span></label><input type="range" id="sF" min="40" max="8000" step="10" value="150" oninput="drawRampIcon(); up();" onchange="play()"></div>
+    <div class="row"><label>終了周波数(Hz): <span id="v-eF">600</span></label><input type="range" id="eF" min="40" max="8000" step="10" value="600" oninput="drawRampIcon(); up();" onchange="play()"></div>
     <div class="row"><label>長さ(秒): <span id="v-dur">0.35</span></label><input type="range" id="dur" min="0.05" max="2" step="0.05" value="0.35" oninput="up()" onchange="play()"></div>
     
     <div class="row">
