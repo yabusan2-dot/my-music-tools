@@ -30,6 +30,7 @@ Web Audio APIのノード（Node）をどのように接続して音声を合成
 
 ```mermaid
 graph TD
+
     subgraph Sound Sources (各音源)
         A[OscillatorNode / 独自波形]
         B[Rhythm Trigger]
