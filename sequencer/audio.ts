@@ -1,7 +1,10 @@
-const actx = new(window.AudioContext||window.webkitAudioContext)();
+const actx = new AudioContext();
+const getV = (id: string): string | number => {
+const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+  if (!el) return 0; // 万が一要素が見つからなかったときの安全策
 
-const getV = (id) => (id==='type1'||id==='type2') ? 
-    document.getElementById(id).value : parseFloat(document.getElementById(id).value);
+  return (id === 'type1' || id === 'type2') ? el.value : parseFloat(el.value);
+};
 
 function readAllDataFromUI() {
     const npm = (currentMeter === 4) ? 8 : 6;
@@ -9,8 +12,8 @@ function readAllDataFromUI() {
     melody1 = new Array(total).fill(0);
     melody2 = new Array(total).fill(0);
     for (let i = 0; i < total; i++) { 
-        const e1 = document.getElementById(`t1-s-${i}`);
-        const e2 = document.getElementById(`t2-s-${i}`);
+        const e1 = document.getElementById(`t1-s-${i}`) as HTMLInputElement | HTMLSelectElement | null;
+        const e2 = document.getElementById(`t2-s-${i}`) as HTMLInputElement | HTMLSelectElement | null;
         if (e1 && e1.value !== "") melody1[i] = parseFloat(e1.value);
         if (e2 && e2.value !== "") melody2[i] = parseFloat(e2.value);
     } 
@@ -18,14 +21,16 @@ function readAllDataFromUI() {
 
 function up() { 
     ['vol','tempo','echo','atk1','dec1','harm1','atk2','dec2','harm2'].forEach(k => { 
-        const el = document.getElementById('v-'+k);
-        if(el) el.textContent = document.getElementById(k).value; 
+        const el = document.getElementById('v-' + k);
+        const input = document.getElementById(k) as HTMLInputElement | null;
+        if (el && input) el.textContent = input.value; 
     }); 
     readAllDataFromUI();
     genC(); 
 }
 
-function toggleAcc(t, i, v) { 
+
+function toggleAcc(t : number, i : number, v : number) { 
     const arr = (t === 1) ? acc1 : acc2; 
     arr[i] = (arr[i] === v) ? 0 : v; 
     refreshAccUI(); 
